@@ -24,11 +24,13 @@ import {
   Sparkles,
   Star,
   Menu,
-  Building2
+  Building2,
+  UserCog
 } from 'lucide-react';
 import { UserProfile, Setting, Service, Trainer, Testimonial, GalleryItem, Lead, PricingPlan, HealthTip, FAQ } from '../types';
 import { db, collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, query, orderBy, signOut, auth, where, limit, uploadImageToStorage } from '../api';
 import { BRAND, DEFAULTS } from '../config';
+import MembersManager from './MembersManager';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 
@@ -117,6 +119,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
   const menuItems = [
     { name: 'Overview', path: '', icon: LayoutDashboard },
     { name: 'Leads', path: 'leads', icon: PhoneCall },
+    { name: 'Members', path: 'members', icon: UserCog },
     { name: 'Equipment', path: 'equipment', icon: Dumbbell },
     { name: 'Facilities', path: 'facilities', icon: Building2 },
     { name: 'Services', path: 'services', icon: Sparkles },
@@ -228,6 +231,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
         <Routes>
           <Route index element={<Overview />} />
           <Route path="leads" element={<LeadsManager />} />
+          <Route path="members" element={<MembersManager />} />
           <Route path="settings" element={<GeneralSettingsManager />} />
           <Route path="equipment" element={<ServicesManager category="Equipment" />} />
           <Route path="facilities" element={<ServicesManager category="Facilities" />} />

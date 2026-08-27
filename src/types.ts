@@ -93,3 +93,183 @@ export interface FAQ {
   answer: string;
   order?: number;
 }
+
+// ============================================================
+//  MEMBER PORTAL
+// ============================================================
+
+export type MembershipStatus = 'active' | 'expiring' | 'expired' | 'frozen' | 'none';
+
+export interface Member {
+  id?: string;
+  name: string;
+  phone: string;
+  email?: string;
+  photoUrl?: string;
+  gender?: 'Male' | 'Female' | 'Other';
+  dob?: string;
+  address?: string;
+  planName?: string;
+  planStart?: string;
+  planExpiry?: string;
+  trainerId?: string;
+  emergencyContact?: string;
+  notes?: string;
+  active?: boolean;
+  frozen?: boolean;
+  mustChangePassword?: boolean;
+  createdAt?: string;
+  lastLoginAt?: string;
+  /** Derived server-side — never stored. */
+  status?: MembershipStatus;
+  daysLeft?: number | null;
+}
+
+export interface AttendanceRow {
+  id?: string;
+  memberId: string;
+  date: string;
+  markedBy?: string;
+}
+
+export interface AttendanceSummary {
+  total: number;
+  thisMonth: number;
+  streak: number;
+}
+
+export interface Payment {
+  id?: string;
+  memberId: string;
+  amount: number;
+  date: string;
+  method: 'cash' | 'upi' | 'card' | 'bank';
+  planName?: string;
+  periodFrom?: string | null;
+  periodTo?: string | null;
+  invoiceNo: string;
+  status: string;
+}
+
+export interface Exercise {
+  name: string;
+  sets?: string;
+  reps?: string;
+  notes?: string;
+}
+
+export interface WorkoutDay {
+  day: string;
+  focus?: string;
+  exercises: Exercise[];
+}
+
+export interface WorkoutPlan {
+  id?: string;
+  memberId: string;
+  title: string;
+  days: WorkoutDay[];
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface WorkoutLog {
+  id?: string;
+  memberId: string;
+  day: string;
+  date: string;
+  notes?: string;
+}
+
+export interface Meal {
+  time: string;
+  name: string;
+  items: string[];
+  calories?: number;
+}
+
+export interface DietPlan {
+  id?: string;
+  memberId: string;
+  title: string;
+  meals: Meal[];
+  notes?: string;
+  targetCalories?: number | null;
+  updatedAt?: string;
+}
+
+export interface Measurement {
+  id?: string;
+  memberId: string;
+  date: string;
+  weight: number;
+  height?: number;
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  arms?: number;
+  thighs?: number;
+  bodyFat?: number;
+  recordedBy?: 'member' | 'admin';
+}
+
+export interface ProgressPhoto {
+  id?: string;
+  memberId: string;
+  url: string;
+  angle: 'front' | 'side' | 'back';
+  caption?: string;
+  date: string;
+}
+
+export interface GymClass {
+  id?: string;
+  name: string;
+  day: string;
+  time: string;
+  trainerName?: string;
+  description?: string;
+  capacity?: number;
+  order?: number;
+  active?: boolean;
+  /** Present on member-facing responses only. */
+  booked?: boolean;
+  /** Present on admin responses only. */
+  bookedCount?: number;
+}
+
+export interface PtSession {
+  id?: string;
+  memberId: string;
+  date: string;
+  time?: string;
+  trainerName?: string;
+  focus?: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+}
+
+export interface RenewalRequest {
+  id?: string;
+  memberId: string;
+  memberName?: string;
+  memberPhone?: string;
+  planName?: string;
+  note?: string;
+  status: 'pending' | 'contacted' | 'completed' | 'cancelled';
+  createdAt: string;
+}
+
+export interface MemberOverview {
+  member: Member;
+  status: MembershipStatus;
+  daysLeft: number | null;
+  trainer: Trainer | null;
+  attendance: AttendanceSummary;
+  lastPayment: Payment | null;
+  totalPaid: number;
+  latestMeasurement: Measurement | null;
+  weightChange: number | null;
+  upcomingPtCount: number;
+  nextPtSession: PtSession | null;
+  workoutsLogged: number;
+}

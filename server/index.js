@@ -13,6 +13,7 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
+import { createMemberRoutes } from './members.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -92,6 +93,25 @@ const requireDb = (_req, res, next) => {
   next();
 };
 
+// ------------------------- Image uploads (shared by admin + members) -------------------------
+const uploadsDir = path.join(__dirname, 'uploads');
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: uploadsDir,
+    filename: (_req, file, cb) => {
+      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      cb(null, `${Date.now()}_${safe}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only image files are allowed'));
+  },
+});
+
 // ------------------------- Auth -------------------------
 function signToken() {
   return jwt.sign({ email: ADMIN_EMAIL, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
@@ -111,7 +131,25 @@ function requireAdmin(req, res, next) {
   }
 }
 
-app.post('/api/auth/login', (req, res) => {
+// Member portal routes (member auth + admin member management).
+const { router: memberRouter, makeRateLimit } = createMemberRoutes({
+  JWT_SECRET,
+  requireDb,
+  requireAdmin,
+  sanitize,
+  upload,
+});
+app.use('/api', memberRouter);
+
+// Brute-force guard on the admin login. Without this a single admin account
+// can be guessed at indefinitely.
+const adminLoginLimit = makeRateLimit({
+  max: 8,
+  windowMs: 15 * 60 * 1000,
+  message: 'Too many login attempts. Please try again in 15 minutes.',
+});
+
+app.post('/api/auth/login', adminLoginLimit, (req, res) => {
   const { email, password } = req.body || {};
   if (typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Email and password are required' });
@@ -267,25 +305,6 @@ app.delete('/api/leads/:id', requireDb, requireAdmin, async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
-});
-
-// ------------------------- Image uploads -------------------------
-const uploadsDir = path.join(__dirname, 'uploads');
-fs.mkdirSync(uploadsDir, { recursive: true });
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: uploadsDir,
-    filename: (_req, file, cb) => {
-      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-      cb(null, `${Date.now()}_${safe}`);
-    },
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed'));
-  },
 });
 
 app.post('/api/upload', requireAdmin, (req, res) => {

@@ -1,7 +1,8 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { restoreSession, onAuthStateChanged, auth, SessionUser } from './api';
-import { UserProfile } from './types';
+import { restoreMemberSession, onMemberChanged } from './memberApi';
+import { UserProfile, Member } from './types';
 import PublicSite from './pages/PublicSite';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotFound from './pages/NotFound';
@@ -11,6 +12,8 @@ import { Toaster } from 'sonner';
 // Code-split: visitors don't download the admin panel.
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const MemberPortal = lazy(() => import('./pages/MemberPortal'));
+const MemberLogin = lazy(() => import('./pages/MemberLogin'));
 
 function Spinner() {
   return (
@@ -26,13 +29,16 @@ function toProfile(u: SessionUser): UserProfile {
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restore the session from a stored token, then stay in sync with login/logout.
-    restoreSession().finally(() => setLoading(false));
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u ? toProfile(u) : null));
-    return unsub;
+    // Admin and member sessions are independent — restore both, then stay in
+    // sync with their respective login/logout events.
+    Promise.allSettled([restoreSession(), restoreMemberSession()]).finally(() => setLoading(false));
+    const unsubAdmin = onAuthStateChanged(auth, (u) => setUser(u ? toProfile(u) : null));
+    const unsubMember = onMemberChanged(setMember);
+    return () => { unsubAdmin(); unsubMember(); };
   }, []);
 
   if (loading) return <Spinner />;
@@ -44,6 +50,11 @@ export default function App() {
         <Routes>
           <Route path="/" element={<PublicSite />} />
           <Route path="/login" element={<LoginPage user={user} />} />
+          <Route path="/member/login" element={<MemberLogin member={member} />} />
+          <Route
+            path="/member"
+            element={member ? <MemberPortal member={member} /> : <Navigate to="/member/login" replace />}
+          />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
           <Route

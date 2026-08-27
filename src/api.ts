@@ -43,7 +43,9 @@ export const auth = {
   onAuthStateChanged(cb: (u: SessionUser | null) => void) {
     cb(currentUser);
     authListeners.add(cb);
-    return () => authListeners.delete(cb);
+    // Braces matter: Set.delete returns a boolean, and a React effect cleanup
+    // must return void.
+    return () => { authListeners.delete(cb); };
   },
 };
 

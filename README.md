@@ -1,4 +1,4 @@
-# IronCore Gym — Website + Admin CMS (Self-hosted)
+# Supermen Fitness Gym — Website + Admin CMS (Self-hosted)
 
 A production-ready gym website with a full admin panel. **No Firebase, no third-party services** — your own backend:
 

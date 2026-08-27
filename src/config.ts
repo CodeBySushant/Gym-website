@@ -11,13 +11,13 @@
 // The actual credentials live in server/.env (ADMIN_EMAIL + ADMIN_PASSWORD).
 export const ADMIN_EMAIL = 'mesushant.official@gmail.com';
 
-// Brand name, split so the accent color can style the second word.
+// Brand name, split so the accent color can style the second part.
 export const BRAND = {
-  first: 'IronCore',
-  accent: 'Gym',
-  full: 'IronCore Gym',
+  first: 'Supermen',
+  accent: 'Fitness Gym',
+  full: 'Supermen Fitness Gym',
   city: 'Bhopal',
-  tagline: "Bhopal's premier fitness destination. Elite equipment, expert coaching, and a culture of resolve.",
+  tagline: "Nehru Nagar's home for serious training. Elite equipment, expert coaching, and a community that shows up.",
 };
 
 // Shown next to the stars in the hero. Set to '' to hide the rating badge
@@ -28,10 +28,13 @@ export const GOOGLE_RATING: string = '';
 export const DEFAULTS = {
   heroHeadline: 'BORN FROM RESOLVE',
   heroSubline: 'Elite fitness community. Your body is the boss.',
-  whatsappNumber: '',
-  callNumber: '',
-  address: '',
-  googleMapsUrl: '',
+  whatsappNumber: '918305213300',
+  callNumber: '918305213300',
+  address: '2nd Floor, BM-125, Main Road, Near Sai Mandir, Nehru Nagar, Bhopal, Madhya Pradesh 462003',
+  // Keyless Google Maps embed — pins the gym's location without an API key.
+  googleMapsUrl:
+    'https://www.google.com/maps?q=Supermen+fitness+gym,+Nehru+Nagar,+Bhopal+462003&output=embed',
+  openHours: 'Mon – Sat: 6:00 AM – 10:00 PM · Sunday Closed',
   heroVideoUrl: '',
 };
 
@@ -40,7 +43,7 @@ export const CONTACT_EMAIL: string = '';
 
 // Social links. Leave a URL empty ('') to hide that icon in the footer.
 export const SOCIALS: { instagram: string; facebook: string; twitter: string; youtube: string } = {
-  instagram: '',
+  instagram: 'https://www.instagram.com/supermen_fitness',
   facebook: '',
   twitter: '',
   youtube: '',

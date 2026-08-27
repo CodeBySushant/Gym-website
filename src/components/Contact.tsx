@@ -21,11 +21,18 @@ export default function Contact({ settings }: ContactProps) {
   const whatsappLink = settings?.whatsappLink || `https://wa.me/${whatsappNumber}`;
   const callNumber = settings?.callNumber || DEFAULTS.callNumber;
   const address = settings?.address || DEFAULTS.address;
-  
-  // Only "/embed" Google Maps URLs work inside an iframe.
-  // In the admin panel: Google Maps -> Share -> Embed a map -> copy the src URL.
+  const openHours = settings?.openHours || DEFAULTS.openHours;
+
+  // Two Google Maps formats work inside an iframe:
+  //   1. Share -> Embed a map -> copy the src  (contains "/embed?pb=")
+  //   2. Keyless search embed                  (contains "output=embed")
+  // Anything else (a normal maps.google.com link) is refused by Google's
+  // X-Frame-Options, so we hide the map rather than render a broken box.
   const rawMapsUrl = settings?.googleMapsUrl || DEFAULTS.googleMapsUrl;
-  const mapsUrl = rawMapsUrl && rawMapsUrl.includes('/embed') ? rawMapsUrl : '';
+  const mapsUrl =
+    rawMapsUrl && (rawMapsUrl.includes('/embed') || rawMapsUrl.includes('output=embed'))
+      ? rawMapsUrl
+      : '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,7 +201,7 @@ export default function Contact({ settings }: ContactProps) {
                 <Clock className="w-6 h-6 text-[#FF003C] flex-shrink-0 mt-1" />
                 <div>
                   <div className="text-xs font-bold uppercase tracking-widest text-white/40 mb-1">Open Hours</div>
-                  <div className="font-bold text-lg">24 Hours / 7 Days</div>
+                  <div className="font-bold text-lg">{openHours}</div>
                 </div>
               </div>
             </div>

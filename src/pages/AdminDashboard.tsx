@@ -315,6 +315,7 @@ const EMPTY_SETTINGS: Setting = {
   callNumber: '',
   address: '',
   googleMapsUrl: '',
+  openHours: '',
   heroVideoUrl: '',
   servicesTitle: '',
   servicesSubtitle: '',
@@ -430,7 +431,7 @@ function GeneralSettingsManager() {
                 value={settings.whatsappNumber}
                 onChange={(e) => setSettings({ ...settings, whatsappNumber: e.target.value })}
                 className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-[#FF003C] outline-none"
-                placeholder="e.g. 919876543210"
+                placeholder="e.g. 918305213300"
               />
             </div>
             <div>
@@ -440,7 +441,7 @@ function GeneralSettingsManager() {
                 value={settings.callNumber}
                 onChange={(e) => setSettings({ ...settings, callNumber: e.target.value })}
                 className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-[#FF003C] outline-none"
-                placeholder="e.g. 919876543210"
+                placeholder="e.g. 918305213300"
               />
             </div>
           </div>
@@ -451,7 +452,7 @@ function GeneralSettingsManager() {
               value={settings.whatsappLink || ''}
               onChange={(e) => setSettings({ ...settings, whatsappLink: e.target.value })}
               className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-[#FF003C] outline-none"
-              placeholder="e.g. https://wa.me/919876543210?text=Hi! (defaults to wa.me/number)"
+              placeholder="e.g. https://wa.me/918305213300?text=Hi! (defaults to wa.me/number)"
             />
           </div>
           <div>
@@ -464,6 +465,16 @@ function GeneralSettingsManager() {
             />
           </div>
           <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Open Hours</label>
+            <input
+              type="text"
+              value={settings.openHours || ''}
+              onChange={(e) => setSettings({ ...settings, openHours: e.target.value })}
+              className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-[#FF003C] outline-none"
+              placeholder="e.g. 6:00 AM – 10:00 PM · All 7 Days"
+            />
+          </div>
+          <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Maps Embed URL</label>
             <input
               type="text"
@@ -472,6 +483,10 @@ function GeneralSettingsManager() {
               className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-[#FF003C] outline-none"
               placeholder="https://www.google.com/maps/embed?pb=..."
             />
+            <p className="text-[10px] text-white/30 font-medium mt-2 leading-relaxed">
+              Must contain <span className="text-[#FF003C]">/embed</span> or <span className="text-[#FF003C]">output=embed</span>. A normal
+              Google Maps link will not load. Get one from Maps → Share → Embed a map.
+            </p>
           </div>
         </div>
 

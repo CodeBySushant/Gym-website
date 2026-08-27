@@ -17,6 +17,7 @@ export interface Setting {
   callNumber: string;
   address: string;
   googleMapsUrl: string;
+  openHours?: string;
   heroVideoUrl: string;
   servicesTitle?: string;
   servicesSubtitle?: string;

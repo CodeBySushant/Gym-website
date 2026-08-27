@@ -1,5 +1,5 @@
 /**
- * IronCore Gym — Backend API
+ * Supermen Fitness Gym — Backend API
  * Express + MongoDB + JWT auth + local image uploads.
  * Replaces Firebase entirely.
  */
@@ -19,7 +19,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 // ------------------------- Config -------------------------
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ironcore-gym';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/supermen-fitness-gym';
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'mesushant.official@gmail.com').toLowerCase();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';

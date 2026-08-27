@@ -3,7 +3,7 @@ import { Dumbbell, Instagram, Facebook, Twitter, Youtube, Lock } from 'lucide-re
 import { Link, useNavigate } from 'react-router-dom';
 import { auth, signOut } from '../api';
 import { Setting } from '../types';
-import { BRAND, SOCIALS, CONTACT_EMAIL } from '../config';
+import { BRAND, SOCIALS, CONTACT_EMAIL, DEFAULTS } from '../config';
 import { toast } from 'sonner';
 
 interface FooterProps {
@@ -25,6 +25,11 @@ export default function Footer({ settings }: FooterProps) {
     navigate('/');
     toast.success('Logged out successfully');
   };
+
+  // Fall back to config so the footer is never blank on a fresh database.
+  const address = settings?.address || DEFAULTS.address;
+  const callNumber = settings?.callNumber || DEFAULTS.callNumber;
+  const openHours = settings?.openHours || DEFAULTS.openHours;
 
   const socialLinks = [
     { Icon: Instagram, url: SOCIALS.instagram, label: 'Instagram' },
@@ -95,12 +100,18 @@ export default function Footer({ settings }: FooterProps) {
           <div>
             <h4 className="text-sm font-black uppercase tracking-[0.2em] mb-8">Contact</h4>
             <ul className="space-y-4">
-              {settings?.address && (
-                <li className="text-white/40 font-medium">{settings.address}</li>
+              {address && <li className="text-white/40 font-medium">{address}</li>}
+              {callNumber && (
+                <li>
+                  <a
+                    href={`tel:+${callNumber}`}
+                    className="text-white/40 hover:text-[#FF003C] transition-colors font-medium"
+                  >
+                    +{callNumber}
+                  </a>
+                </li>
               )}
-              {settings?.callNumber && (
-                <li className="text-white/40 font-medium">+{settings.callNumber}</li>
-              )}
+              {openHours && <li className="text-white/40 font-medium">{openHours}</li>}
               {CONTACT_EMAIL && (
                 <li className="text-white/40 font-medium">{CONTACT_EMAIL}</li>
               )}

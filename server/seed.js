@@ -18,7 +18,7 @@ import mongoose from 'mongoose';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ironcore-gym';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/supermen-fitness-gym';
 
 const img = (id, w = 1200) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=80`;
 
@@ -27,11 +27,13 @@ const DATA = {
     {
       heroHeadline: 'BORN FROM RESOLVE',
       heroSubline: 'Elite equipment. Expert coaching. A community that pushes you further than you thought possible.',
-      whatsappNumber: '919876543210',
+      whatsappNumber: '918305213300',
       whatsappLink: '',
-      callNumber: '919876543210',
-      address: '12 Fitness Avenue, MP Nagar, Bhopal, Madhya Pradesh 462011',
-      googleMapsUrl: '',
+      callNumber: '918305213300',
+      address: '2nd Floor, BM-125, Main Road, Near Sai Mandir, Nehru Nagar, Bhopal, Madhya Pradesh 462003',
+      googleMapsUrl:
+        'https://www.google.com/maps?q=Supermen+fitness+gym,+Nehru+Nagar,+Bhopal+462003&output=embed',
+      openHours: 'Mon – Sat: 6:00 AM – 10:00 PM · Sunday Closed',
       heroVideoUrl: '',
       servicesTitle: 'Elite Offerings',
       servicesSubtitle: 'World-class equipment, facilities and services under one roof',
@@ -125,7 +127,7 @@ const DATA = {
     },
   ],
   faqs: [
-    { question: 'What are the gym timings?', answer: 'We are open 5:00 AM to 11:00 PM, all 7 days. Timings on public holidays are announced in advance at the front desk.', order: 1 },
+    { question: 'What are the gym timings?', answer: 'We are open 6:00 AM to 10:00 PM, Monday to Saturday. We are closed on Sundays. Timings on public holidays are announced in advance at the front desk.', order: 1 },
     { question: 'Is there a free trial?', answer: 'Yes — book a free trial through the form on this page and our team will call you to schedule your first session, including a floor walkthrough with a trainer.', order: 2 },
     { question: 'Do you provide personal trainers?', answer: 'Yes, certified personal trainers are available at additional cost. Quarterly and Annual members get free PT sessions included in their plan.', order: 3 },
     { question: 'Can I freeze my membership?', answer: 'Annual memberships can be frozen for up to 30 days per year for travel or medical reasons. Speak to the front desk to activate a freeze.', order: 4 },

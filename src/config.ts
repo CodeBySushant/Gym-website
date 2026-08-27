@@ -41,10 +41,19 @@ export const DEFAULTS = {
 // Contact email shown in the footer. Set to '' to hide.
 export const CONTACT_EMAIL: string = '';
 
-// Social links. Leave a URL empty ('') to hide that icon in the footer.
-export const SOCIALS: { instagram: string; facebook: string; twitter: string; youtube: string } = {
+/**
+ * Social links shown in the footer.
+ *
+ * An empty string ('') does NOT hide the icon — it renders dimmed and
+ * non-clickable, so the row still shows every platform the gym plans to be on.
+ * Paste a real URL here and that icon becomes a live link automatically.
+ *
+ * WhatsApp is not listed: it is built from DEFAULTS.whatsappNumber (or the
+ * WhatsApp Link set in Admin -> General Settings) so there is one number to
+ * maintain, not two.
+ */
+export const SOCIALS: { instagram: string; facebook: string; youtube: string } = {
   instagram: 'https://www.instagram.com/supermen_fitness',
   facebook: '',
-  twitter: '',
   youtube: '',
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dumbbell, Instagram, Facebook, Twitter, Youtube, Lock } from 'lucide-react';
+import { Dumbbell, Instagram, Facebook, Youtube, MessageCircle, Lock } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth, signOut } from '../api';
 import { Setting } from '../types';
@@ -31,12 +31,20 @@ export default function Footer({ settings }: FooterProps) {
   const callNumber = settings?.callNumber || DEFAULTS.callNumber;
   const openHours = settings?.openHours || DEFAULTS.openHours;
 
+  // WhatsApp reuses the same number as the rest of the site, so there is only
+  // one place to change it.
+  const whatsappNumber = settings?.whatsappNumber || DEFAULTS.whatsappNumber;
+  const whatsappLink = settings?.whatsappLink || (whatsappNumber ? `https://wa.me/${whatsappNumber}` : '');
+
+  // Every platform is listed. Those without a URL render dimmed and
+  // non-clickable rather than disappearing — add the URL in config.ts and the
+  // icon goes live on its own.
   const socialLinks = [
     { Icon: Instagram, url: SOCIALS.instagram, label: 'Instagram' },
+    { Icon: MessageCircle, url: whatsappLink, label: 'WhatsApp' },
     { Icon: Facebook, url: SOCIALS.facebook, label: 'Facebook' },
-    { Icon: Twitter, url: SOCIALS.twitter, label: 'Twitter / X' },
     { Icon: Youtube, url: SOCIALS.youtube, label: 'YouTube' },
-  ].filter(s => s.url);
+  ];
 
   const quickLinks = [
     { name: 'Home', href: '#home' },
@@ -63,22 +71,35 @@ export default function Footer({ settings }: FooterProps) {
             <p className="text-white/40 max-w-md font-medium leading-relaxed mb-8">
               {BRAND.tagline}
             </p>
-            {socialLinks.length > 0 && (
-              <div className="flex gap-4">
-                {socialLinks.map(({ Icon, url, label }) => (
+            <div className="flex gap-4">
+              {socialLinks.map(({ Icon, url, label }) =>
+                url ? (
                   <a
                     key={label}
                     href={url}
                     target="_blank"
                     rel="noreferrer"
                     aria-label={label}
-                    className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#FF003C] hover:border-[#FF003C] transition-all duration-300"
+                    title={label}
+                    className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#FF003C] hover:border-[#FF003C] transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF003C]"
                   >
                     <Icon className="w-5 h-5" />
                   </a>
-                ))}
-              </div>
-            )}
+                ) : (
+                  // Rendered as a span, not a disabled link: it stays out of the
+                  // tab order and cannot be activated by keyboard or click.
+                  <span
+                    key={label}
+                    aria-disabled="true"
+                    aria-label={`${label} — coming soon`}
+                    title={`${label} — coming soon`}
+                    className="w-10 h-10 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center text-white/20 cursor-not-allowed select-none"
+                  >
+                    <Icon className="w-5 h-5" />
+                  </span>
+                )
+              )}
+            </div>
           </div>
 
           <div>

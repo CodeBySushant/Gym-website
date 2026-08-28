@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Service, Setting } from '../types';
 import { cn } from '../lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';

@@ -7,11 +7,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, Trash2, Edit2, KeyRound, CalendarCheck, Wallet, Dumbbell,
-  Apple, X, Users, UserPlus, RefreshCw, Check, Ruler,
+  Apple, X, Users, UserPlus, RefreshCw, Check, Ruler, Camera, User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Member, Payment, AttendanceRow, WorkoutPlan, DietPlan, Measurement, Trainer } from '../types';
-import { getDocs, collection, db } from '../api';
+import { getDocs, collection, db, uploadImageToStorage } from '../api';
 import { adminRequest, J } from '../adminApi';
 import { cn } from '../lib/utils';
 import {
@@ -22,7 +22,7 @@ import {
 
 
 const EMPTY: Partial<Member> = {
-  name: '', phone: '', email: '', planName: '', planStart: '', planExpiry: '',
+  name: '', phone: '', email: '', photoUrl: '', planName: '', planStart: '', planExpiry: '',
   trainerId: '', emergencyContact: '', address: '', notes: '', active: true,
 };
 
@@ -39,6 +39,7 @@ export default function MembersManager() {
   const [confirmDelete, setConfirmDelete] = useState<Member | null>(null);
   const [pwReset, setPwReset] = useState<Member | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const load = () => {
     adminRequest<Member[]>('/api/admin/members').then(setMembers).catch((e) => { toast.error(e.message); setMembers([]); });
@@ -200,6 +201,48 @@ export default function MembersManager() {
               <Field label="Plan Start"><input type="date" className={inputClass} value={editing.planStart || ''} onChange={(e) => setEditing({ ...editing, planStart: e.target.value })} /></Field>
               <Field label="Plan Expiry" hint="Drives the member's status badge."><input type="date" className={inputClass} value={editing.planExpiry || ''} onChange={(e) => setEditing({ ...editing, planExpiry: e.target.value })} /></Field>
             </div>
+
+            <Field label="Member Photo" hint="Optional. Shown on their portal and on the card here.">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-2xl bg-black border border-white/10 overflow-hidden flex items-center justify-center flex-shrink-0">
+                  {editing.photoUrl
+                    ? <img src={editing.photoUrl} alt="" className="w-full h-full object-cover" />
+                    : <User className="w-7 h-7 text-white/20" />}
+                </div>
+                <label className="flex-grow bg-black border border-dashed border-white/15 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-[#FF003C] transition-colors">
+                  <Camera className="w-5 h-5 text-white/40 mb-1" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                    {uploadingPhoto ? 'Uploading…' : editing.photoUrl ? 'Replace Photo' : 'Upload Photo'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingPhoto}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (!file) return;
+                      setUploadingPhoto(true);
+                      try {
+                        const url = await uploadImageToStorage(file);
+                        setEditing((prev) => (prev ? { ...prev, photoUrl: url } : prev));
+                        toast.success('Photo uploaded');
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Upload failed');
+                      } finally {
+                        setUploadingPhoto(false);
+                      }
+                    }}
+                  />
+                </label>
+                {editing.photoUrl && (
+                  <Button variant="ghost" onClick={() => setEditing({ ...editing, photoUrl: '' })} className="flex-shrink-0">
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </Field>
 
             <Field label="Address"><input className={inputClass} value={editing.address || ''} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></Field>
             <Field label="Internal Notes" hint="Only visible to admins."><textarea className={`${inputClass} h-20 resize-none`} value={editing.notes || ''} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></Field>

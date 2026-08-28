@@ -51,13 +51,67 @@ const M = {
 const digits = (v) => String(v || '').replace(/\D/g, '');
 const isValidId = (v) => Types.ObjectId.isValid(String(v));
 
+// ------------------------- Dates, in the gym's timezone -------------------------
+/**
+ * Every "what day is it" question below used to be answered with the server's
+ * own local time. That is correct on a laptop in Bhopal and wrong the moment
+ * this is deployed to a host running UTC: at 5 AM IST the server still thinks
+ * it is yesterday, so a check-in lands on the wrong day, streaks break, and a
+ * membership expires a day early.
+ *
+ * Everything now resolves against GYM_TIMEZONE instead of the process clock.
+ */
+const TZ = process.env.GYM_TIMEZONE || 'Asia/Kolkata';
+
+const DAY_FMT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+/** The calendar date at that instant in the gym's timezone, as 'YYYY-MM-DD'. */
+function dayKey(dateish) {
+  const d = dateish ? new Date(dateish) : new Date();
+  if (Number.isNaN(d.getTime())) return null;
+  return DAY_FMT.format(d); // en-CA formats as YYYY-MM-DD
+}
+
+/** The day before a 'YYYY-MM-DD' key. Used to walk an attendance streak back. */
+function previousDay(key) {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Milliseconds to add to a UTC instant to get the gym's wall-clock time. */
+function tzOffsetMs(instant) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(instant);
+  const get = (type) => Number(parts.find((p) => p.type === type).value);
+  // hour can come back as 24 for midnight depending on the ICU build.
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+  return asUtc - instant.getTime();
+}
+
+/**
+ * The [start, end) UTC instants covering one calendar day in the gym's
+ * timezone — what Mongo range queries need. India has no DST, so a flat 24h
+ * span is exact here; a DST zone would drift by an hour twice a year.
+ */
+function dayRange(dateish) {
+  const midnightUtc = new Date(`${dayKey(dateish)}T00:00:00Z`);
+  const approx = new Date(midnightUtc.getTime() - tzOffsetMs(midnightUtc));
+  const start = new Date(midnightUtc.getTime() - tzOffsetMs(approx));
+  return { start, end: new Date(start.getTime() + 86400000) };
+}
+
 /** Days until a plan expires. Negative means already expired. */
 function daysUntil(dateish) {
   if (!dateish) return null;
-  const end = new Date(dateish);
-  if (Number.isNaN(end.getTime())) return null;
-  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  return Math.round((startOfDay(end) - startOfDay(new Date())) / 86400000);
+  const end = dayKey(dateish);
+  if (!end) return null;
+  return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${dayKey()}T00:00:00Z`)) / 86400000);
 }
 
 /** Derived status so the frontend never has to compute it. */
@@ -72,20 +126,17 @@ function membershipStatus(member) {
 
 /** Attendance streak + this-month count, computed from raw attendance rows. */
 function attendanceSummary(rows) {
-  const days = new Set(rows.map((r) => new Date(r.date).toDateString()));
+  const days = new Set(rows.map((r) => dayKey(r.date)));
   let streak = 0;
-  const cursor = new Date();
+  let cursor = dayKey();
   // Today not yet visited shouldn't break a streak that ran through yesterday.
-  if (!days.has(cursor.toDateString())) cursor.setDate(cursor.getDate() - 1);
-  while (days.has(cursor.toDateString())) {
+  if (!days.has(cursor)) cursor = previousDay(cursor);
+  while (days.has(cursor)) {
     streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
+    cursor = previousDay(cursor);
   }
-  const now = new Date();
-  const thisMonth = rows.filter((r) => {
-    const d = new Date(r.date);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
+  const thisMonthKey = dayKey().slice(0, 7); // 'YYYY-MM'
+  const thisMonth = rows.filter((r) => dayKey(r.date)?.startsWith(thisMonthKey)).length;
   return { total: rows.length, thisMonth, streak };
 }
 
@@ -98,6 +149,20 @@ async function nextInvoiceNo() {
 /** Fixed-window limiter, keyed by IP. Protects both login routes from guessing. */
 function makeRateLimit({ max, windowMs, message }) {
   const hits = new Map();
+
+  // Without this the map keeps one entry per IP that ever hit the route, for
+  // the life of the process — a slow leak on a server that stays up for months.
+  // unref() means the timer never keeps the process alive on its own.
+  const sweep = setInterval(() => {
+    const cutoff = Date.now() - windowMs;
+    for (const [ip, times] of hits) {
+      const live = times.filter((t) => t > cutoff);
+      if (live.length) hits.set(ip, live);
+      else hits.delete(ip);
+    }
+  }, Math.max(windowMs, 60_000));
+  if (typeof sweep.unref === 'function') sweep.unref();
+
   return (req, res, next) => {
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
     const now = Date.now();
@@ -214,7 +279,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         if (T) trainer = await T.findById(m.trainerId);
       }
 
-      const upcomingPt = ptSessions.filter((s) => new Date(s.date) >= new Date(new Date().toDateString()));
+      const upcomingPt = ptSessions.filter((s) => new Date(s.date) >= dayRange(new Date()).start);
       const latest = measurements[0] || null;
       const previous = measurements[1] || null;
 
@@ -273,10 +338,11 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       if (Number.isNaN(date.getTime())) return res.status(400).json({ error: 'Invalid date' });
 
       // One log per day per workout — toggling off removes it.
+      const { start, end } = dayRange(date);
       const existing = await M.workout_logs.findOne({
         memberId,
         day,
-        date: { $gte: new Date(date.toDateString()), $lt: new Date(new Date(date.toDateString()).getTime() + 86400000) },
+        date: { $gte: start, $lt: end },
       });
       if (existing) {
         await M.workout_logs.deleteOne({ _id: existing._id });
@@ -584,8 +650,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const date = req.body?.date ? new Date(req.body.date) : new Date();
       if (Number.isNaN(date.getTime())) return res.status(400).json({ error: 'Invalid date' });
 
-      const dayStart = new Date(date.toDateString());
-      const dayEnd = new Date(dayStart.getTime() + 86400000);
+      const { start: dayStart, end: dayEnd } = dayRange(date);
       if (await M.attendance.findOne({ memberId, date: { $gte: dayStart, $lt: dayEnd } })) {
         return res.status(409).json({ error: 'Attendance already marked for this day' });
       }
@@ -822,8 +887,8 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         const s = membershipStatus(r.toJSON());
         if (stats[s] !== undefined) stats[s] += 1;
       }
-      const dayStart = new Date(new Date().toDateString());
-      stats.checkedInToday = await M.attendance.countDocuments({ date: { $gte: dayStart } });
+      const { start: dayStart, end: dayEnd } = dayRange(new Date());
+      stats.checkedInToday = await M.attendance.countDocuments({ date: { $gte: dayStart, $lt: dayEnd } });
       stats.pendingRenewals = await M.renewal_requests.countDocuments({ status: 'pending' });
       res.json(stats);
     } catch (e) {

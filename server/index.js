@@ -94,7 +94,15 @@ const requireDb = (_req, res, next) => {
 };
 
 // ------------------------- Image uploads (shared by admin + members) -------------------------
-const uploadsDir = path.join(__dirname, 'uploads');
+/**
+ * Where uploaded images live. Defaults to server/uploads, which is fine
+ * locally but is WIPED ON EVERY REDEPLOY on hosts with ephemeral disks
+ * (Render free tier, Railway without a volume). Point UPLOADS_DIR at a mounted
+ * persistent volume in production so the gym's photos survive a restart.
+ */
+const uploadsDir = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(__dirname, 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({
@@ -250,17 +258,14 @@ app.put('/api/settings', requireDb, requireAdmin, async (req, res) => {
 });
 
 // ------------------------- Leads (public create, admin manage) -------------------------
-// Simple in-memory rate limit: max 5 lead submissions per IP per hour.
-const leadHits = new Map();
-function leadRateLimit(req, res, next) {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
-  const now = Date.now();
-  const hits = (leadHits.get(ip) || []).filter((t) => now - t < 60 * 60 * 1000);
-  if (hits.length >= 5) return res.status(429).json({ error: 'Too many requests. Please try again later.' });
-  hits.push(now);
-  leadHits.set(ip, hits);
-  next();
-}
+// Max 5 lead submissions per IP per hour. Uses the shared limiter from
+// members.js rather than a second hand-rolled Map — that one never pruned
+// itself, so it grew by one entry per visiting IP for the life of the process.
+const leadRateLimit = makeRateLimit({
+  max: 5,
+  windowMs: 60 * 60 * 1000,
+  message: 'Too many requests. Please try again later.',
+});
 
 app.post('/api/leads', requireDb, leadRateLimit, async (req, res) => {
   try {
@@ -329,4 +334,13 @@ if (fs.existsSync(distDir)) {
 app.listen(PORT, () => {
   console.log(`[server] Running on http://localhost:${PORT}`);
   console.log(`[server] Admin: ${ADMIN_EMAIL}`);
+  console.log(`[server] Timezone: ${process.env.GYM_TIMEZONE || 'Asia/Kolkata'}`);
+  console.log(`[server] Uploads: ${uploadsDir}`);
+  if (process.env.NODE_ENV === 'production' && !process.env.UPLOADS_DIR) {
+    console.warn(
+      '[server] WARNING: UPLOADS_DIR is not set, so uploads go inside the app directory.\n' +
+      '[server]          On a host with an ephemeral disk every redeploy deletes them.\n' +
+      '[server]          Mount a persistent volume and set UPLOADS_DIR to its path.'
+    );
+  }
 });

@@ -170,6 +170,16 @@ function notify(path: string) {
   }, 200));
 }
 
+/**
+ * How often a subscription re-checks the server, in ms.
+ *
+ * The notify() mechanism above only fires for writes made in THIS tab, so
+ * before this poll existed two staff editing at once never saw each other's
+ * changes — one would happily overwrite the other's edit. A real socket would
+ * be better; a 30s poll is a fraction of the code and plenty for a gym.
+ */
+const POLL_MS = 30_000;
+
 export function onSnapshot(
   q: Query | CollectionRef,
   cb: (snap: ReturnType<typeof snapshotOf>) => void,
@@ -184,7 +194,22 @@ export function onSnapshot(
   load();
   if (!subscribers.has(path)) subscribers.set(path, new Set());
   subscribers.get(path)!.add(load);
-  return () => { subscribers.get(path)?.delete(load); };
+
+  // Skip the poll while the tab is hidden — no point burning requests on a
+  // dashboard nobody is looking at. Coming back to the tab refetches at once.
+  const timer = setInterval(() => {
+    if (document.visibilityState === 'visible') load();
+  }, POLL_MS);
+  const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
+
+  return () => {
+    subscribers.get(path)?.delete(load);
+    clearInterval(timer);
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('focus', onVisible);
+  };
 }
 
 export async function getDocs(q: Query | CollectionRef) {

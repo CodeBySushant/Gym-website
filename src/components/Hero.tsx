@@ -7,6 +7,25 @@ interface HeroProps {
   settings: Setting | null;
 }
 
+/**
+ * Decides which headline words get the accent colour.
+ *
+ * The old rule coloured every other word, which put the accent on whichever
+ * word happened to land on an odd index — for "BORN FROM RESOLVE" that was
+ * "FROM", a preposition, while the word carrying the meaning stayed white.
+ *
+ * Now: wrap a word in *asterisks* to accent it explicitly, otherwise the last
+ * word is accented, since that is where the payoff of a headline sits.
+ */
+function accentHeadline(headline: string): { word: string; accent: boolean }[] {
+  const words = headline.trim().split(/\s+/).filter(Boolean);
+  const marked = words.some((w) => /^\*.+\*$/.test(w));
+  return words.map((w, i) => ({
+    word: w.replace(/^\*|\*$/g, ''),
+    accent: marked ? /^\*.+\*$/.test(w) : i === words.length - 1,
+  }));
+}
+
 export default function Hero({ settings }: HeroProps) {
   const isLoading = settings === null;
   const headline = settings?.heroHeadline || DEFAULTS.heroHeadline;
@@ -74,7 +93,7 @@ export default function Hero({ settings }: HeroProps) {
         is invisible against a photograph.
       */}
       <div
-        className="absolute bottom-6 md:bottom-10 left-0 right-0 z-[1] overflow-hidden whitespace-nowrap opacity-[0.09] pointer-events-none select-none"
+        className="absolute -bottom-2 md:-bottom-4 left-0 right-0 z-[1] overflow-hidden whitespace-nowrap opacity-[0.055] pointer-events-none select-none"
         aria-hidden="true"
       >
         <div className="text-[16vw] leading-none font-black italic uppercase text-white animate-marquee">
@@ -110,9 +129,9 @@ export default function Hero({ settings }: HeroProps) {
               <Skeleton className="h-16 md:h-24 w-4/5 max-w-md" />
             </div>
           ) : (
-            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black italic tracking-tighter uppercase leading-[0.85] mb-6 drop-shadow-[0_4px_30px_rgba(0,0,0,0.95)]">
-              {headline.split(' ').map((word, i) => (
-                <span key={i} className={i % 2 !== 0 ? 'text-[#FF003C]' : 'text-white'}>
+            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black italic tracking-tighter uppercase leading-[0.85] mb-6 text-balance drop-shadow-[0_4px_30px_rgba(0,0,0,0.95)]">
+              {accentHeadline(headline).map(({ word, accent }, i) => (
+                <span key={i} className={accent ? 'text-[#FF003C]' : 'text-white'}>
                   {word}{' '}
                 </span>
               ))}
@@ -125,7 +144,7 @@ export default function Hero({ settings }: HeroProps) {
           {isLoading ? (
             <Skeleton className="h-6 w-full max-w-md mb-10 mx-auto md:mx-0" />
           ) : (
-            <p className="text-base sm:text-lg md:text-xl text-white/75 mb-9 font-medium max-w-xl mx-auto md:mx-0 leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
+            <p className="text-base sm:text-lg md:text-xl text-white/75 mb-9 font-medium max-w-lg mx-auto md:mx-0 leading-relaxed text-pretty drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
               {subline}
             </p>
           )}

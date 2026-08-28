@@ -58,15 +58,18 @@ const DATA = {
       bio: '10+ years coaching powerlifting and strength athletes. Certified S&C specialist focused on building raw, functional strength safely.',
       imageUrl: img('1567013127542-490d757e51fc', 800),
       quote: 'Strength is earned one rep at a time.',
-      order: 1,
+      order: 2,
     },
     {
-      name: 'Priya Sharma',
-      specialization: 'Functional Fitness & HIIT',
-      bio: 'Former state-level athlete turned coach. Designs high-energy functional programs that build endurance, mobility and confidence.',
-      imageUrl: img('1571731956672-f2b94d7dd0cb', 800),
-      quote: 'Your only competition is yesterday.',
-      order: 2,
+      // The gym's actual owner. Bio and quote are placeholders until Ankit
+      // supplies his own — see server/set-owner.js, which updates the live
+      // record (this seed only runs against an empty collection).
+      name: 'Ankit Giri',
+      specialization: 'Founder & Head Coach',
+      bio: 'Founder of Supermen Fitness Gym in Nehru Nagar, Bhopal.',
+      imageUrl: '/assets/owner.png',
+      quote: '',
+      order: 1,
     },
     {
       name: 'Rahul Singh',

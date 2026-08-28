@@ -9,6 +9,11 @@ interface OptimizedImageProps {
   aspectRatio?: string;
   width?: number;
   height?: number;
+  /**
+   * Which part of the image to keep when it gets cropped. Defaults to centre.
+   * Use 'object-top' for portraits where the subject's head sits high in frame.
+   */
+  objectPosition?: string;
 }
 
 export default function OptimizedImage({ 
@@ -17,7 +22,8 @@ export default function OptimizedImage({
   className, 
   aspectRatio = "aspect-square",
   width,
-  height
+  height,
+  objectPosition = 'object-center',
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -49,7 +55,11 @@ export default function OptimizedImage({
           onError={() => setError(true)}
           referrerPolicy="no-referrer"
           className={cn(
-            "w-full h-auto object-cover transition-all duration-700",
+            // h-full is what makes object-cover actually crop. With h-auto the
+            // image kept its natural ratio and short images left dead space
+            // below them inside the fixed-ratio container.
+            "w-full h-full object-cover transition-all duration-700",
+            objectPosition,
             isLoaded ? "opacity-100 scale-100 blur-0" : "opacity-0 scale-105 blur-lg"
           )}
         />

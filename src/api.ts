@@ -257,7 +257,13 @@ export async function deleteDoc(ref: DocRef) {
 }
 
 // ------------------------- Image upload -------------------------
-export async function uploadImageToStorage(file: File): Promise<string> {
+/**
+ * Preset names must match IMAGE_PRESETS in server/index.js. The server crops to
+ * that frame, so what the gym uploads no longer has to be the right shape.
+ */
+export type ImagePreset = 'trainer' | 'service' | 'gallery' | 'tip' | 'member' | 'hero';
+
+export async function uploadImageToStorage(file: File, preset?: ImagePreset): Promise<string> {
   const MAX_MB = 10;
   if (file.size > MAX_MB * 1024 * 1024) {
     throw new Error(`Image too large. Please upload a file under ${MAX_MB}MB.`);

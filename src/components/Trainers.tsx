@@ -46,11 +46,15 @@ export default function Trainers({ trainers }: TrainersProps) {
             viewport={{ once: true }}
             className="group relative rounded-3xl overflow-hidden bg-white/5 border border-white/10 hover:border-[#FF003C]/50 transition-all duration-500"
           >
+            {/* Every card is locked to 3:4 regardless of what was uploaded —
+                a square, a landscape shot or a phone portrait all crop to the
+                same frame, so the row stays even. */}
             <OptimizedImage
               src={trainer.imageUrl}
               alt={trainer.name}
               aspectRatio="aspect-[3/4]"
               className="w-full"
+              objectPosition="object-top"
             />
             
             <div className="p-8">

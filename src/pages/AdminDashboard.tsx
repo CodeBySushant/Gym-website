@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Setting, Service, Trainer, Testimonial, GalleryItem, Lead, PricingPlan, HealthTip, FAQ } from '../types';
 import { db, collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, query, orderBy, signOut, auth, where, limit, uploadImageToStorage } from '../api';
+import type { ImagePreset } from '../api';
 import { BRAND, DEFAULTS } from '../config';
 import MembersManager from './MembersManager';
 import RenewalsManager from './RenewalsManager';
@@ -442,7 +443,7 @@ function GeneralSettingsManager() {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   try {
-                    const url = await uploadImage(file);
+                    const url = await uploadImage(file, 'hero');
                     setSettings({ ...settings, heroImageUrl: url });
                   } catch { /* useImageUpload already shows a toast */ }
                   e.target.value = '';
@@ -661,10 +662,10 @@ function LeadsManager() {
 
 // --- Helper for Image Uploads (real Firebase Storage) ---
 const useImageUpload = () => {
-  const uploadImage = async (file: File): Promise<string> => {
+  const uploadImage = async (file: File, preset?: ImagePreset): Promise<string> => {
     const toastId = toast.loading('Uploading image...');
     try {
-      const url = await uploadImageToStorage(file);
+      const url = await uploadImageToStorage(file, preset);
       toast.success('Image uploaded', { id: toastId });
       return url;
     } catch (error) {
@@ -814,7 +815,7 @@ function ServicesManager({ category }: { category?: 'Equipment' | 'Facilities' |
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const base64 = await uploadImage(file);
+      const base64 = await uploadImage(file, 'service');
       setEditingService(prev => ({ ...prev, imageUrl: base64 }));
     }
   };
@@ -1032,7 +1033,7 @@ function TrainersManager() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const base64 = await uploadImage(file);
+      const base64 = await uploadImage(file, 'trainer');
       setEditingTrainer(prev => ({ ...prev, imageUrl: base64 }));
     }
   };
@@ -1225,7 +1226,7 @@ function GalleryManager() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const base64 = await uploadImage(file);
+      const base64 = await uploadImage(file, 'gallery');
       setEditingItem(prev => ({ ...prev, url: base64, type: 'image' }));
     }
   };
@@ -1615,7 +1616,7 @@ function TestimonialsManager() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const base64 = await uploadImage(file);
+      const base64 = await uploadImage(file, 'member');
       setEditingTestimonial(prev => ({ ...prev, imageUrl: base64 }));
     }
   };
@@ -2015,7 +2016,7 @@ function TipsManager() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const base64 = await uploadImage(file);
+      const base64 = await uploadImage(file, 'tip');
       setEditingTip(prev => ({ ...prev, imageUrl: base64 }));
     }
   };

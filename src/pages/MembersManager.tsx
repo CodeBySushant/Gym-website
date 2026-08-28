@@ -237,7 +237,7 @@ export default function MembersManager() {
                       if (!file) return;
                       setUploadingPhoto(true);
                       try {
-                        const url = await uploadImageToStorage(file);
+                        const url = await uploadImageToStorage(file, 'member');
                         setEditing((prev) => (prev ? { ...prev, photoUrl: url } : prev));
                         toast.success('Photo uploaded');
                       } catch (err) {

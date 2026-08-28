@@ -27,7 +27,7 @@ export default function LegalPage({ kind }: LegalPageProps) {
           <div className="space-y-6 text-white/60 leading-relaxed">
             <p><b className="text-white">What we collect.</b> When you book a free trial through our website, we collect your name and phone number so that our team can contact you about your visit.</p>
             <p><b className="text-white">How we use it.</b> Your details are used only to respond to your enquiry and manage your membership with {BRAND.full}. We do not sell or share your personal information with third parties for marketing.</p>
-            <p><b className="text-white">Where it's stored.</b> Data is stored securely on Google Firebase infrastructure and is accessible only to authorized gym staff.</p>
+            <p><b className="text-white">Where it's stored.</b> Your details are stored on our own secured server database and are accessible only to authorized gym staff. Access is protected by an individual login and we do not pass the data to any third-party service.</p>
             <p><b className="text-white">Your rights.</b> You can ask us to delete your contact details at any time by reaching out to the gym directly{CONTACT_EMAIL ? ` at ${CONTACT_EMAIL}` : ''}.</p>
             <p className="text-white/30 text-sm">Last updated: {new Date().getFullYear()}. This is a general template — please review it with the gym's own policies before relying on it.</p>
           </div>

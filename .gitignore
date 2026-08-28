@@ -8,3 +8,5 @@ coverage/
 !.env.example
 server/.env
 server/uploads/
+
+server/real-photos/

@@ -10,6 +10,29 @@ interface GalleryProps {
   items: GalleryItem[] | null;
 }
 
+/**
+ * Turns a YouTube or Vimeo link into its embeddable player URL.
+ *
+ * The admin panel labels this field "Video URL (YouTube/Vimeo)", but a share
+ * link cannot be played by a <video> tag — it needs an iframe pointed at the
+ * player URL. Returns null for anything else, which is then treated as a
+ * direct video file.
+ */
+function toEmbedUrl(raw: string): string | null {
+  const url = (raw || '').trim();
+  if (!url) return null;
+
+  const yt = url.match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
+  );
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+
+  return null;
+}
+
 export default function Gallery({ items }: GalleryProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -49,67 +72,74 @@ export default function Gallery({ items }: GalleryProps) {
                 <Skeleton className="w-full h-full" />
               </div>
             ))
-          ) : displayItems.map((item, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: i * 0.05 }}
-              viewport={{ once: true, margin: "0px 100px 0px 100px" }}
-              className="flex-shrink-0 w-[300px] md:w-[600px] aspect-video relative rounded-3xl overflow-hidden snap-center group"
-            >
-              {item.type === 'image' ? (
-                <OptimizedImage
-                  src={item.url}
-                  alt={item.caption || `Inside ${BRAND.full}`}
-                  aspectRatio="aspect-auto"
-                  className="w-full h-full"
-                />
-              ) : (
-                <div className="w-full h-full relative">
-                  <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+          ) : displayItems.map((item, i) => {
+            // Computed once per item so the regex does not run twice per render.
+            const embedUrl = item.type === 'video' ? toEmbedUrl(item.url) : null;
+
+            return (
+              <motion.div
+                key={item.id || i}
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: i * 0.05 }}
+                viewport={{ once: true, margin: "0px 100px 0px 100px" }}
+                className="flex-shrink-0 w-[300px] md:w-[600px] aspect-video relative rounded-3xl overflow-hidden snap-center group"
+              >
+                {item.type === 'image' ? (
+                  <OptimizedImage
                     src={item.url}
+                    alt={item.caption || `Inside ${BRAND.full}`}
+                    aspectRatio="aspect-auto"
+                    className="w-full h-full"
                   />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="bg-[#FF003C] p-4 rounded-full shadow-[0_0_20px_rgba(255,0,60,0.6)]">
-                      <Play className="w-8 h-8 text-white fill-current" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-              {item.type === 'video' && (
-                <div className="absolute inset-0">
+                ) : embedUrl ? (
+                  // Hosted video (YouTube / Vimeo) — the player owns the frame,
+                  // so nothing is layered over it that could swallow a click.
                   <iframe
                     className="w-full h-full"
-                    src="https://www.youtube.com/embed/HnoPHqrdXQ8"
-                    title="YouTube video player"
-                    frameBorder="0"
+                    src={embedUrl}
+                    title={item.caption || `Video from ${BRAND.full}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
-                  ></iframe>
-                </div>
-              )}
+                    loading="lazy"
+                  />
+                ) : (
+                  // Direct video file (.mp4 / .webm) uploaded or linked by the gym.
+                  <div className="w-full h-full relative">
+                    <video
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      src={item.url}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="bg-[#FF003C] p-4 rounded-full shadow-[0_0_20px_rgba(255,0,60,0.6)]">
+                        <Play className="w-8 h-8 text-white fill-current" />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-              {item.caption && (
-                <div className="absolute bottom-6 left-8 right-8">
-                  <span className="text-sm font-black uppercase tracking-[0.3em] text-[#FF003C] mb-1 block drop-shadow-lg">
-                    {item.type === 'video' ? 'Energy in Motion' : `Inside ${BRAND.first}`}
-                  </span>
-                  <h3 className="text-xl font-bold uppercase tracking-widest leading-none drop-shadow-lg">
-                    {item.caption}
-                  </h3>
-                </div>
-              )}
-            </motion.div>
-          ))}
+                {/* Hover scrim. pointer-events-none matters: without it this div
+                    covers the whole card and blocks the video player beneath. */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
+                {item.caption && (
+                  <div className="absolute bottom-6 left-8 right-8 pointer-events-none">
+                    <span className="text-sm font-black uppercase tracking-[0.3em] text-[#FF003C] mb-1 block drop-shadow-lg">
+                      {item.type === 'video' ? 'Energy in Motion' : `Inside ${BRAND.first}`}
+                    </span>
+                    <h3 className="text-xl font-bold uppercase tracking-widest leading-none drop-shadow-lg">
+                      {item.caption}
+                    </h3>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
 
         {!isLoading && displayItems.length > 0 && (

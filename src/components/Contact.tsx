@@ -207,7 +207,7 @@ export default function Contact({ settings }: ContactProps) {
             </div>
             
             {mapsUrl && (
-              <div className="flex-grow min-h-[300px] rounded-3xl overflow-hidden border border-white/10 grayscale hover:grayscale-0 transition-all duration-700">
+              <div className="flex-grow min-h-[300px] rounded-3xl overflow-hidden border border-white/10 hover:border-white/25 transition-colors duration-300">
                 <iframe
                   src={mapsUrl}
                   title="Gym location on Google Maps"

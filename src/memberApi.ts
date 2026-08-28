@@ -90,11 +90,19 @@ export async function restoreMemberSession(): Promise<Member | null> {
   }
 }
 
-export const changePassword = (currentPassword: string, newPassword: string) =>
-  request<{ ok: true }>('/api/member/auth/change-password', {
+/**
+ * Changing a password retires every token issued before it, so the server
+ * hands back a fresh one for this session. Without storing it, the member
+ * would be signed out the instant they updated their own password.
+ */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const res = await request<{ ok: true; token?: string }>('/api/member/auth/change-password', {
     method: 'POST',
     body: json({ currentPassword, newPassword }),
   });
+  if (res.token) setMemberToken(res.token);
+  return res;
+}
 
 // ------------------------- Member data -------------------------
 export const fetchOverview = () => request<MemberOverview>('/api/member/overview');
@@ -119,19 +127,22 @@ export const addMeasurement = (m: Partial<Measurement>) =>
 
 export const fetchProgressPhotos = () => request<ProgressPhoto[]>('/api/member/progress-photos');
 
-export const addProgressPhoto = (url: string, angle: string, caption: string) =>
-  request<ProgressPhoto>('/api/member/progress-photos', { method: 'POST', body: json({ url, angle, caption }) });
+export const addProgressPhoto = (file: string, angle: string, caption: string) =>
+  request<ProgressPhoto>('/api/member/progress-photos', { method: 'POST', body: json({ file, angle, caption }) });
 
 export const deleteProgressPhoto = (id: string) =>
   request<{ ok: true }>(`/api/member/progress-photos/${id}`, { method: 'DELETE' });
 
-export async function uploadMemberImage(file: File): Promise<string> {
+/**
+ * Returns both halves: `file` is the opaque reference to attach to a record,
+ * `url` is a short-lived signed link usable directly in an <img> for preview.
+ */
+export async function uploadMemberImage(file: File): Promise<{ file: string; url: string }> {
   const MAX_MB = 10;
   if (file.size > MAX_MB * 1024 * 1024) throw new Error(`Image too large. Please upload a file under ${MAX_MB}MB.`);
   const form = new FormData();
   form.append('file', file);
-  const data = await request<{ url: string }>('/api/member/upload', { method: 'POST', body: form });
-  return data.url;
+  return request<{ file: string; url: string }>('/api/member/upload', { method: 'POST', body: form });
 }
 
 export const fetchSchedule = () =>

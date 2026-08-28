@@ -28,6 +28,18 @@ const EMPTY: Partial<Member> = {
 
 const toInputDate = (d?: string | null) => (d ? new Date(d).toISOString().slice(0, 10) : '');
 
+/**
+ * Math.random() is not cryptographically secure — V8's generator state can be
+ * recovered from a handful of observed outputs — and `.slice(-8)` left barely
+ * six usable characters. crypto.getRandomValues draws from the platform CSPRNG.
+ * The alphabet omits 0/O/1/l/I because these get read aloud at the front desk.
+ */
+function generatePassword(length = 12) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint32Array(length));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+}
+
 export default function MembersManager() {
   const [members, setMembers] = useState<Member[] | null>(null);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -250,8 +262,8 @@ export default function MembersManager() {
             {!editing.id && (
               <Field label="Initial Password *" hint="Share this with the member. They'll be asked to change it on first login.">
                 <div className="flex gap-2">
-                  <input className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
-                  <Button variant="ghost" onClick={() => setPassword(Math.random().toString(36).slice(-8))} className="flex-shrink-0">Generate</Button>
+                  <input className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 10 characters" />
+                  <Button variant="ghost" onClick={() => setPassword(generatePassword())} className="flex-shrink-0">Generate</Button>
                 </div>
               </Field>
             )}
@@ -281,8 +293,8 @@ export default function MembersManager() {
           </p>
           <Field label="New Password">
             <div className="flex gap-2">
-              <input className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
-              <Button variant="ghost" onClick={() => setPassword(Math.random().toString(36).slice(-8))} className="flex-shrink-0">Generate</Button>
+              <input className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 10 characters" />
+              <Button variant="ghost" onClick={() => setPassword(generatePassword())} className="flex-shrink-0">Generate</Button>
             </div>
           </Field>
           <div className="flex gap-3">

@@ -76,7 +76,7 @@ export default function Progress() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [pending, setPending] = useState<{ url: string; angle: string; caption: string } | null>(null);
+  const [pending, setPending] = useState<{ file: string; url: string; angle: string; caption: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -119,8 +119,8 @@ export default function Progress() {
     if (!file) return;
     setUploading(true);
     try {
-      const url = await uploadMemberImage(file);
-      setPending({ url, angle: 'front', caption: '' });
+      const uploaded = await uploadMemberImage(file);
+      setPending({ ...uploaded, angle: 'front', caption: '' });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -133,7 +133,7 @@ export default function Progress() {
     if (!pending) return;
     setSaving(true);
     try {
-      await addProgressPhoto(pending.url, pending.angle, pending.caption);
+      await addProgressPhoto(pending.file, pending.angle, pending.caption);
       toast.success('Photo added');
       setPending(null);
       setPhotoOpen(false);

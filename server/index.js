@@ -5,10 +5,12 @@
  */
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -85,8 +87,67 @@ function sanitize(value) {
 
 // ------------------------- App -------------------------
 const app = express();
-app.use(cors());
+
+/**
+ * H-01. The login limiter used to key on req.headers['x-forwarded-for'], a
+ * header any client can set — so its 8-attempts-per-15-minutes cap could be
+ * skipped by sending a different value each request. Express only resolves a
+ * trustworthy req.ip once it knows how many proxies sit in front of it.
+ *
+ * Default 0 = trust nothing, req.ip is the raw socket address (correct for
+ * local dev and for a directly-exposed server). Behind nginx or a single load
+ * balancer, set TRUST_PROXY=1. Never set it to `true`: that trusts the whole
+ * forwarded chain and reintroduces the spoof.
+ */
+app.set('trust proxy', Number(process.env.TRUST_PROXY) || 0);
+
+// H-04. No security headers existed at all. The CSP is what stops an injected
+// script from running even if a dangerous file reaches the browser.
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: false,
+    reportOnly: process.env.CSP_REPORT_ONLY === 'true',
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      // Tailwind and motion/react both write inline style attributes.
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://images.unsplash.com'],
+      connectSrc: ["'self'"],
+      // Google Maps embed + the gallery's YouTube / Vimeo players.
+      frameSrc: ['https://www.google.com', 'https://www.youtube.com', 'https://player.vimeo.com'],
+      mediaSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+  crossOriginEmbedderPolicy: false,
+}));
+app.disable('x-powered-by');
+
+// L-01. Lock the API to the site's own origin in production. Comma-separated
+// list, e.g. CORS_ORIGIN=https://supermenfitness.com
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : true; // dev: reflect the requesting origin
+app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
+
+/**
+ * M-05. Handlers used to return e.message straight to the client, leaking
+ * Mongoose schema details and internal paths on routes that are reachable
+ * without authentication. The operator keeps the detail; the caller gets a
+ * reference they can quote when reporting the problem.
+ */
+function fail(res, error, status = 500) {
+  const ref = crypto.randomBytes(4).toString('hex');
+  console.error(`[error ${ref}]`, error);
+  res.status(status).json({ error: `Something went wrong. Reference: ${ref}` });
+}
 
 const requireDb = (_req, res, next) => {
   if (!dbReady) return res.status(503).json({ error: 'Database unavailable. Is MongoDB running?' });
@@ -103,22 +164,53 @@ const requireDb = (_req, res, next) => {
 const uploadsDir = process.env.UPLOADS_DIR
   ? path.resolve(process.env.UPLOADS_DIR)
   : path.join(__dirname, 'uploads');
-fs.mkdirSync(uploadsDir, { recursive: true });
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: uploadsDir,
-    filename: (_req, file, cb) => {
-      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-      cb(null, `${Date.now()}_${safe}`);
-    },
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed'));
-  },
-});
+/**
+ * H-02. Member progress photos are body-composition photographs. They used to
+ * land in the same directory as marketing images and were served to anyone who
+ * knew the URL. They now live OUTSIDE the statically served directory and are
+ * only reachable through a short-lived signed link (see members.js).
+ */
+const privateDir = process.env.PRIVATE_UPLOADS_DIR
+  ? path.resolve(process.env.PRIVATE_UPLOADS_DIR)
+  : path.join(path.dirname(uploadsDir), 'private-uploads');
+
+fs.mkdirSync(uploadsDir, { recursive: true });
+fs.mkdirSync(privateDir, { recursive: true });
+
+/**
+ * C-01. The old filter tested file.mimetype — a value copied verbatim from the
+ * request — and then kept the caller's own filename, extension included. So a
+ * file announced as image/png but named payload.svg was accepted and later
+ * served as image/svg+xml, which executes script on this origin.
+ *
+ * The extension is now chosen by the server from this map, never by the
+ * uploader, and the filename is a UUID. SVG is deliberately absent: it is an
+ * XML format that legitimately carries <script>, so it can never be served
+ * inline from a trusted origin.
+ */
+const ALLOWED_IMAGE_TYPES = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/webp', '.webp'],
+]);
+
+function makeUploader(destination) {
+  return multer({
+    storage: multer.diskStorage({
+      destination,
+      filename: (_req, file, cb) => cb(null, `${crypto.randomUUID()}${ALLOWED_IMAGE_TYPES.get(file.mimetype)}`),
+    }),
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    fileFilter: (_req, file, cb) =>
+      ALLOWED_IMAGE_TYPES.has(file.mimetype)
+        ? cb(null, true)
+        : cb(new Error('Only JPEG, PNG and WebP images are allowed')),
+  });
+}
+
+const upload = makeUploader(uploadsDir);        // public marketing images
+const uploadPrivate = makeUploader(privateDir); // member progress photos
 
 // ------------------------- Auth -------------------------
 function signToken() {
@@ -146,6 +238,9 @@ const { router: memberRouter, makeRateLimit } = createMemberRoutes({
   requireAdmin,
   sanitize,
   upload,
+  uploadPrivate,
+  privateDir,
+  fail,
 });
 app.use('/api', memberRouter);
 
@@ -196,7 +291,7 @@ app.get('/api/content/:col', requireDb, async (req, res) => {
     const rows = await Model.find(filter).sort({ [sortField]: dir }).limit(limit);
     res.json(rows);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -207,7 +302,7 @@ app.post('/api/content/:col', requireDb, requireAdmin, async (req, res) => {
     const row = await Model.create(sanitize(req.body));
     res.status(201).json(row);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -219,7 +314,7 @@ app.patch('/api/content/:col/:id', requireDb, requireAdmin, async (req, res) => 
     if (!row) return res.status(404).json({ error: 'Not found' });
     res.json(row);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -230,7 +325,7 @@ app.delete('/api/content/:col/:id', requireDb, requireAdmin, async (req, res) =>
     await Model.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -240,7 +335,7 @@ app.get('/api/settings', requireDb, async (_req, res) => {
     const row = await models.settings.findOne();
     res.json(row || null);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -253,7 +348,7 @@ app.put('/api/settings', requireDb, requireAdmin, async (req, res) => {
     );
     res.json(row);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -278,7 +373,7 @@ app.post('/api/leads', requireDb, leadRateLimit, async (req, res) => {
     const row = await models.leads.create({ name, phone, status: 'new', createdAt: new Date() });
     res.status(201).json({ id: row.id });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -287,7 +382,7 @@ app.get('/api/leads', requireDb, requireAdmin, async (_req, res) => {
     const rows = await models.leads.find().sort({ createdAt: -1 }).limit(500);
     res.json(rows);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -299,7 +394,7 @@ app.patch('/api/leads/:id', requireDb, requireAdmin, async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Not found' });
     res.json(row);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -308,7 +403,7 @@ app.delete('/api/leads/:id', requireDb, requireAdmin, async (req, res) => {
     await models.leads.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    fail(res, e);
   }
 });
 
@@ -320,7 +415,15 @@ app.post('/api/upload', requireAdmin, (req, res) => {
   });
 });
 
-app.use('/uploads', express.static(uploadsDir, { maxAge: '30d', immutable: true }));
+app.use('/uploads', express.static(uploadsDir, {
+  maxAge: '30d',
+  setHeaders: (res) => {
+    // Even if a dangerous file somehow lands here, nosniff stops the browser
+    // second-guessing the type and the per-response CSP kills inline script.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'");
+  },
+}));
 
 // ------------------------- Serve frontend in production -------------------------
 const distDir = path.join(__dirname, '..', 'dist');
@@ -336,6 +439,8 @@ app.listen(PORT, () => {
   console.log(`[server] Admin: ${ADMIN_EMAIL}`);
   console.log(`[server] Timezone: ${process.env.GYM_TIMEZONE || 'Asia/Kolkata'}`);
   console.log(`[server] Uploads: ${uploadsDir}`);
+  console.log(`[server] Private uploads: ${privateDir}`);
+  console.log(`[server] Trust proxy: ${app.get('trust proxy')}`);
   if (process.env.NODE_ENV === 'production' && !process.env.UPLOADS_DIR) {
     console.warn(
       '[server] WARNING: UPLOADS_DIR is not set, so uploads go inside the app directory.\n' +

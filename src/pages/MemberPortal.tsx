@@ -55,7 +55,7 @@ export default function MemberPortal({ member }: { member: Member }) {
   };
 
   const submitPassword = async () => {
-    if (pw.next.length < 6) { toast.error('New password must be at least 6 characters'); return; }
+    if (pw.next.length < 10) { toast.error('New password must be at least 10 characters'); return; }
     if (pw.next !== pw.confirm) { toast.error('New passwords do not match'); return; }
     setSaving(true);
     try {
@@ -213,7 +213,7 @@ export default function MemberPortal({ member }: { member: Member }) {
             <input type="password" className={inputClass} value={pw.current}
               onChange={(e) => setPw({ ...pw, current: e.target.value })} autoComplete="current-password" />
           </Field>
-          <Field label="New Password" hint="At least 6 characters.">
+          <Field label="New Password" hint="At least 10 characters.">
             <input type="password" className={inputClass} value={pw.next}
               onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" />
           </Field>

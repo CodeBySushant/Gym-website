@@ -11,6 +11,9 @@
  * write another member's data by changing a URL or a body field.
  */
 import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -45,10 +48,42 @@ const M = {
   class_bookings: mongoose.model('class_bookings', looseSchema({ memberId: 1 }), 'class_bookings'),
   pt_sessions: mongoose.model('pt_sessions', looseSchema({ memberId: 1, date: 1 }), 'pt_sessions'),
   renewal_requests: mongoose.model('renewal_requests', looseSchema({ memberId: 1 }), 'renewal_requests'),
+  counters: mongoose.model('counters', looseSchema(), 'counters'),
 };
 
 // ------------------------- Helpers -------------------------
 const digits = (v) => String(v || '').replace(/\D/g, '');
+
+/**
+ * M-01. toJSON only stripped passwordHash, so member login returned the whole
+ * document — including `notes`, the field the admin UI labels "Only visible to
+ * admins". A blacklist fails open: every field added to these strict:false
+ * schemas would leak by default. This whitelist fails closed.
+ */
+const MEMBER_SAFE_FIELDS = [
+  'id', 'name', 'phone', 'email', 'photoUrl', 'gender', 'dob', 'address',
+  'planName', 'planStart', 'planExpiry', 'trainerId', 'emergencyContact',
+  'mustChangePassword', 'active', 'frozen', 'createdAt', 'lastLoginAt',
+];
+
+/** The member's own view of themselves. Never used for admin responses. */
+function toMemberView(doc) {
+  const json = typeof doc.toJSON === 'function' ? doc.toJSON() : doc;
+  return Object.fromEntries(Object.entries(json).filter(([k]) => MEMBER_SAFE_FIELDS.includes(k)));
+}
+
+/** M-03. Makes user input a literal in a $regex, so no quantifier can be injected. */
+const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** M-05. Same reasoning as index.js: log the detail, return a reference. */
+function fail(res, error, status = 500) {
+  const ref = crypto.randomBytes(4).toString('hex');
+  console.error(`[error ${ref}]`, error);
+  res.status(status).json({ error: `Something went wrong. Reference: ${ref}` });
+}
+
+/** Minimum length for any password this app accepts. */
+const MIN_PASSWORD = 10;
 const isValidId = (v) => Types.ObjectId.isValid(String(v));
 
 // ------------------------- Dates, in the gym's timezone -------------------------
@@ -140,10 +175,22 @@ function attendanceSummary(rows) {
   return { total: rows.length, thisMonth, streak };
 }
 
+/**
+ * M-04. Numbering from countDocuments() had two failure modes on documents the
+ * gym issues as receipts: two concurrent payments read the same count and got
+ * the SAME invoice number, and deleting a payment made the next one reuse a
+ * number already printed. $inc on a dedicated counter is atomic at the document
+ * level, so concurrent callers are serialised by the database, and the counter
+ * never rewinds because it is independent of the payments collection.
+ */
 async function nextInvoiceNo() {
   const year = new Date().getFullYear();
-  const count = await M.payments.countDocuments({ invoiceNo: { $regex: `^INV-${year}-` } });
-  return `INV-${year}-${String(count + 1).padStart(4, '0')}`;
+  const row = await M.counters.findOneAndUpdate(
+    { _id: `invoice-${year}` },
+    { $inc: { seq: 1 } },
+    { upsert: true, new: true }
+  );
+  return `INV-${year}-${String(row.seq).padStart(4, '0')}`;
 }
 
 /** Fixed-window limiter, keyed by IP. Protects both login routes from guessing. */
@@ -164,7 +211,8 @@ function makeRateLimit({ max, windowMs, message }) {
   if (typeof sweep.unref === 'function') sweep.unref();
 
   return (req, res, next) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+    // H-01: req.ip honours the app's trust-proxy setting; the raw header does not.
+    const ip = req.ip || 'unknown';
     const now = Date.now();
     const recent = (hits.get(ip) || []).filter((t) => now - t < windowMs);
     if (recent.length >= max) return res.status(429).json({ error: message });
@@ -175,12 +223,72 @@ function makeRateLimit({ max, windowMs, message }) {
 }
 
 // ------------------------- Router -------------------------
-export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, sanitize, upload }) {
+export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, sanitize, upload, uploadPrivate, privateDir, fail: _fail }) {
   const router = express.Router();
 
+  // H-03. 30 days was a long life for a token sitting in localStorage with no
+  // way to revoke it. `tv` is compared against the member row on every request,
+  // so bumping tokenVersion invalidates every token already issued — real
+  // revocation without giving up stateless JWTs.
+  const MEMBER_SESSION = `${Number(process.env.SESSION_DAYS_MEMBER) || 7}d`;
+
   function signMemberToken(member) {
-    return jwt.sign({ sub: member.id || member._id.toString(), role: 'member' }, JWT_SECRET, { expiresIn: '30d' });
+    return jwt.sign(
+      {
+        sub: member.id || member._id.toString(),
+        role: 'member',
+        tv: member.tokenVersion || 0,
+      },
+      JWT_SECRET,
+      { expiresIn: MEMBER_SESSION }
+    );
   }
+
+  /**
+   * H-02. Progress photos live outside the static directory. An <img> tag
+   * cannot send an Authorization header, so access is granted by a signed,
+   * expiring link instead. The HMAC is unguessable and the link dies after an
+   * hour, which is a far smaller window than the previous "public forever".
+   */
+  const PHOTO_LINK_TTL = 60 * 60 * 1000;
+
+  const photoSignature = (file, exp) =>
+    crypto.createHmac('sha256', JWT_SECRET).update(`${file}.${exp}`).digest('hex').slice(0, 32);
+
+  function signedPhotoUrl(file) {
+    if (!file) return null;
+    const exp = Date.now() + PHOTO_LINK_TTL;
+    return `/api/photo/${encodeURIComponent(file)}?exp=${exp}&sig=${photoSignature(file, exp)}`;
+  }
+
+  /** Adds a fresh signed url to a stored photo row. Legacy rows keep their old url. */
+  const withPhotoUrl = (row) => {
+    const json = row.toJSON();
+    return { ...json, url: json.file ? signedPhotoUrl(json.file) : json.url };
+  };
+
+  router.get('/photo/:file', (req, res) => {
+    const file = path.basename(String(req.params.file || '')); // strips any traversal
+    const exp = Number(req.query.exp);
+    const sig = String(req.query.sig || '');
+
+    if (!Number.isFinite(exp) || exp < Date.now()) {
+      return res.status(410).json({ error: 'This link has expired. Reload the page.' });
+    }
+    const expected = photoSignature(file, exp);
+    const given = Buffer.from(sig);
+    const want = Buffer.from(expected);
+    if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) {
+      return res.status(403).json({ error: 'Invalid link' });
+    }
+
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.sendFile(path.join(privateDir, file), (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: 'Not found' });
+    });
+  });
 
   function requireMember(req, res, next) {
     const header = req.headers.authorization || '';
@@ -189,7 +297,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     try {
       const payload = jwt.verify(token, JWT_SECRET);
       if (payload.role !== 'member') throw new Error('wrong role');
-      req.member = { id: payload.sub };
+      req.member = { id: payload.sub, tv: payload.tv || 0 };
       next();
     } catch {
       return res.status(401).json({ error: 'Session expired. Please log in again.' });
@@ -201,6 +309,11 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     if (!isValidId(req.member.id)) return res.status(401).json({ error: 'Invalid session' });
     const member = await M.members.findById(req.member.id);
     if (!member) return res.status(401).json({ error: 'Account no longer exists' });
+    // H-03: a password change or admin reset bumps tokenVersion, which retires
+    // every token issued before it.
+    if ((req.member.tv || 0) !== (member.tokenVersion || 0)) {
+      return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
     req.memberDoc = member;
     next();
   }
@@ -230,32 +343,40 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
 
       await M.members.updateOne({ _id: member._id }, { $set: { lastLoginAt: new Date() } });
       const json = member.toJSON();
-      res.json({ token: signMemberToken(json), member: json });
+      // Token is signed from the full doc (it needs tokenVersion); the response
+      // body is the filtered view.
+      res.json({ token: signMemberToken(json), member: toMemberView(member) });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
   router.get('/member/auth/me', ...memberOnly, (req, res) => {
-    const m = req.memberDoc.toJSON();
-    res.json({ ...m, status: membershipStatus(m), daysLeft: daysUntil(m.planExpiry) });
+    const full = req.memberDoc.toJSON();
+    res.json({ ...toMemberView(req.memberDoc), status: membershipStatus(full), daysLeft: daysUntil(full.planExpiry) });
   });
 
   router.post('/member/auth/change-password', ...memberOnly, async (req, res) => {
     try {
       const current = String(req.body?.currentPassword || '');
       const next = String(req.body?.newPassword || '');
-      if (next.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+      if (next.length < MIN_PASSWORD) {
+        return res.status(400).json({ error: `New password must be at least ${MIN_PASSWORD} characters` });
+      }
       if (!bcrypt.compareSync(current, req.memberDoc.passwordHash || '')) {
         return res.status(401).json({ error: 'Current password is incorrect' });
       }
+      // Bumping tokenVersion retires any session an attacker still holds; the
+      // fresh token below keeps THIS session alive so the member is not
+      // bounced to the login screen for doing the right thing.
       await M.members.updateOne(
         { _id: req.memberDoc._id },
-        { $set: { passwordHash: bcrypt.hashSync(next, 10), mustChangePassword: false } }
+        { $set: { passwordHash: bcrypt.hashSync(next, 10), mustChangePassword: false }, $inc: { tokenVersion: 1 } }
       );
-      res.json({ ok: true });
+      const updated = await M.members.findById(req.memberDoc._id);
+      res.json({ ok: true, token: signMemberToken(updated) });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -284,7 +405,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const previous = measurements[1] || null;
 
       res.json({
-        member: m,
+        member: toMemberView(req.memberDoc),
         status: membershipStatus(m),
         daysLeft: daysUntil(m.planExpiry),
         trainer: trainer ? trainer.toJSON() : null,
@@ -298,7 +419,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         workoutsLogged: workoutLogs.length,
       });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -307,7 +428,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const rows = await M.attendance.find({ memberId: req.memberDoc._id.toString() }).sort({ date: -1 }).limit(400);
       res.json({ rows, summary: attendanceSummary(rows) });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -316,7 +437,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const rows = await M.payments.find({ memberId: req.memberDoc._id.toString() }).sort({ date: -1 }).limit(200);
       res.json(rows);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -326,7 +447,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const logs = await M.workout_logs.find({ memberId: req.memberDoc._id.toString() }).sort({ date: -1 }).limit(90);
       res.json({ plan, logs });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -351,7 +472,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       await M.workout_logs.create({ memberId, day, date, notes: String(req.body?.notes || '').slice(0, 500) });
       res.status(201).json({ logged: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -359,7 +480,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     try {
       res.json(await M.diet_plans.findOne({ memberId: req.memberDoc._id.toString() }));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -367,7 +488,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     try {
       res.json(await M.measurements.find({ memberId: req.memberDoc._id.toString() }).sort({ date: 1 }).limit(200));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -382,57 +503,72 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       if (!row.weight) return res.status(400).json({ error: 'Weight is required' });
       res.status(201).json(await M.measurements.create(row));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
   router.get('/member/progress-photos', ...memberOnly, async (req, res) => {
     try {
-      res.json(await M.progress_photos.find({ memberId: req.memberDoc._id.toString() }).sort({ date: -1 }).limit(200));
+      const rows = await M.progress_photos.find({ memberId: req.memberDoc._id.toString() }).sort({ date: -1 }).limit(200);
+      res.json(rows.map(withPhotoUrl));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
   router.post('/member/progress-photos', ...memberOnly, async (req, res) => {
     try {
-      const url = String(req.body?.url || '');
-      if (!url.startsWith('/uploads/')) return res.status(400).json({ error: 'Invalid image' });
+      // Only a filename this server generated is accepted — the UUID pattern
+      // cannot express a path, and the file must actually exist.
+      const file = path.basename(String(req.body?.file || ''));
+      if (!/^[a-f0-9-]{36}\.(jpg|png|webp)$/i.test(file) || !fs.existsSync(path.join(privateDir, file))) {
+        return res.status(400).json({ error: 'Invalid image' });
+      }
       const angle = ['front', 'side', 'back'].includes(req.body?.angle) ? req.body.angle : 'front';
       const row = await M.progress_photos.create({
         memberId: req.memberDoc._id.toString(),
-        url,
+        file,
         angle,
         caption: String(req.body?.caption || '').slice(0, 120),
         date: new Date(),
       });
-      res.status(201).json(row);
+      res.status(201).json(withPhotoUrl(row));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
   router.delete('/member/progress-photos/:id', ...memberOnly, async (req, res) => {
     try {
       if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
-      // Scoped delete — a member can only ever remove their own photo.
-      const result = await M.progress_photos.deleteOne({
+      // Scoped lookup — a member can only ever remove their own photo.
+      const photo = await M.progress_photos.findOne({
         _id: req.params.id,
         memberId: req.memberDoc._id.toString(),
       });
-      if (!result.deletedCount) return res.status(404).json({ error: 'Not found' });
+      if (!photo) return res.status(404).json({ error: 'Not found' });
+      await M.progress_photos.deleteOne({ _id: photo._id });
+      // M-06: the row used to go while the file stayed on disk forever, so a
+      // photo a member "deleted" was still retrievable.
+      if (photo.file) {
+        fs.promises.unlink(path.join(privateDir, photo.file)).catch(() => { /* already gone */ });
+      }
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
-  /** Member-scoped upload, so progress photos don't need the admin token. */
+  /**
+   * Member-scoped upload. Writes to the PRIVATE directory — these are body
+   * photos, not marketing images — and hands back a signed preview link plus
+   * the opaque filename to attach in the next call.
+   */
   router.post('/member/upload', requireDb, requireMember, (req, res) => {
-    upload.single('file')(req, res, (err) => {
+    uploadPrivate.single('file')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: 'No file provided' });
-      res.json({ url: `/uploads/${req.file.filename}` });
+      res.json({ file: req.file.filename, url: signedPhotoUrl(req.file.filename) });
     });
   });
 
@@ -450,7 +586,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         ptSessions,
       });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -474,7 +610,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       await M.class_bookings.create({ memberId, classId, createdAt: new Date() });
       res.status(201).json({ booked: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -494,7 +630,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       });
       res.status(201).json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -517,7 +653,10 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     try {
       const q = String(req.query.q || '').trim();
       const filter = q
-        ? { $or: [{ name: { $regex: q, $options: 'i' } }, { phone: { $regex: digits(q) || q } }] }
+        ? { $or: [
+            { name: { $regex: escapeRegex(q).slice(0, 60), $options: 'i' } },
+            { phone: { $regex: escapeRegex(digits(q) || q).slice(0, 60) } },
+          ] }
         : {};
       const rows = await M.members.find(filter).sort({ createdAt: -1 }).limit(500);
       res.json(rows.map((r) => {
@@ -525,7 +664,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         return { ...m, status: membershipStatus(m), daysLeft: daysUntil(m.planExpiry) };
       }));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -535,7 +674,9 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const password = String(req.body?.password || '');
       if (!data.name) return res.status(400).json({ error: 'Name is required' });
       if (!data.phone || data.phone.length < 10) return res.status(400).json({ error: 'A valid phone number is required' });
-      if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      if (password.length < MIN_PASSWORD) {
+        return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters` });
+      }
       if (await M.members.findOne({ phone: data.phone })) {
         return res.status(409).json({ error: 'A member with this phone number already exists' });
       }
@@ -548,7 +689,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       });
       res.status(201).json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -564,7 +705,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       if (!row) return res.status(404).json({ error: 'Not found' });
       res.json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -572,16 +713,23 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     try {
       if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
       const password = String(req.body?.password || '');
-      if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      if (password.length < MIN_PASSWORD) {
+        return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters` });
+      }
+      // An admin resets a password precisely when an account may be compromised,
+      // so every existing session for that member must die with it.
       const row = await M.members.findByIdAndUpdate(
         req.params.id,
-        { $set: { passwordHash: bcrypt.hashSync(password, 10), mustChangePassword: true } },
+        {
+          $set: { passwordHash: bcrypt.hashSync(password, 10), mustChangePassword: true },
+          $inc: { tokenVersion: 1 },
+        },
         { new: true }
       );
       if (!row) return res.status(404).json({ error: 'Not found' });
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -604,7 +752,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       ]);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -634,11 +782,11 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         workoutPlan,
         dietPlan,
         measurements,
-        photos,
+        photos: photos.map(withPhotoUrl),
         ptSessions,
       });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -656,7 +804,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       }
       res.status(201).json(await M.attendance.create({ memberId, date, markedBy: 'admin' }));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -666,7 +814,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       await M.attendance.findByIdAndDelete(req.params.id);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -702,7 +850,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       }
       res.status(201).json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -712,7 +860,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       await M.payments.findByIdAndDelete(req.params.id);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -731,7 +879,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       );
       res.json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -751,7 +899,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       );
       res.json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -767,7 +915,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       if (!row.weight) return res.status(400).json({ error: 'Weight is required' });
       res.status(201).json(await M.measurements.create(row));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -779,7 +927,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const map = new Map(counts.map((c) => [String(c._id), c.n]));
       res.json(rows.map((r) => ({ ...r.toJSON(), booked: map.get(r._id.toString()) || 0 })));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -787,7 +935,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     try {
       res.status(201).json(await M.classes.create(sanitize({ ...req.body, createdAt: new Date() })));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -798,7 +946,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       if (!row) return res.status(404).json({ error: 'Not found' });
       res.json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -811,7 +959,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       ]);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -830,7 +978,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         status: 'scheduled',
       })));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -843,7 +991,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       if (!row) return res.status(404).json({ error: 'Not found' });
       res.json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -853,7 +1001,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       await M.pt_sessions.findByIdAndDelete(req.params.id);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -861,7 +1009,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     try {
       res.json(await M.renewal_requests.find().sort({ createdAt: -1 }).limit(200));
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -874,7 +1022,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       if (!row) return res.status(404).json({ error: 'Not found' });
       res.json(row);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 
@@ -892,7 +1040,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       stats.pendingRenewals = await M.renewal_requests.countDocuments({ status: 'pending' });
       res.json(stats);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      fail(res, e);
     }
   });
 

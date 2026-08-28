@@ -25,12 +25,15 @@ import {
   Star,
   Menu,
   Building2,
-  UserCog
+  UserCog,
+  RefreshCw
 } from 'lucide-react';
 import { UserProfile, Setting, Service, Trainer, Testimonial, GalleryItem, Lead, PricingPlan, HealthTip, FAQ } from '../types';
 import { db, collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, query, orderBy, signOut, auth, where, limit, uploadImageToStorage } from '../api';
 import { BRAND, DEFAULTS } from '../config';
 import MembersManager from './MembersManager';
+import RenewalsManager from './RenewalsManager';
+import { adminRequest } from '../adminApi';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 
@@ -43,42 +46,38 @@ enum OperationType {
   WRITE = 'write',
 }
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string;
-    email?: string;
-    emailVerified?: boolean;
-    isAnonymous?: boolean;
-    tenantId?: string | null;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
+const ACTION_LABEL: Record<OperationType, string> = {
+  [OperationType.CREATE]: 'save',
+  [OperationType.UPDATE]: 'update',
+  [OperationType.DELETE]: 'delete',
+  [OperationType.LIST]: 'load',
+  [OperationType.GET]: 'load',
+  [OperationType.WRITE]: 'save',
+};
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email || undefined,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  toast.error(`Firestore Error: ${errInfo.error}`);
-  throw new Error(JSON.stringify(errInfo));
+/** Turns a collection path like 'health_tips' into something readable. */
+const prettyPath = (path: string | null) =>
+  path ? path.split('/')[0].replace(/_/g, ' ') : 'data';
+
+/**
+ * Reports a failed API call to the admin.
+ *
+ * Two things changed here. It no longer says "Firestore" — this app talks to
+ * its own Express + MongoDB backend, and the gym owner has no idea what
+ * Firestore is. And it deliberately does NOT re-throw: several call sites are
+ * onSnapshot error callbacks, where throwing produced unhandled promise
+ * rejections that nothing could catch.
+ */
+function handleDataError(error: unknown, operationType: OperationType, path: string | null) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('[admin] API error', { operationType, path, message, admin: auth.currentUser?.email });
+
+  const unreachable = /database unavailable|failed to fetch|networkerror|load failed/i.test(message);
+  toast.error(
+    unreachable
+      ? 'Cannot reach the server. Check that the backend is running and MongoDB is up.'
+      : `Could not ${ACTION_LABEL[operationType] || 'load'} ${prettyPath(path)}. ${message}`
+  );
 }
 
 import { 
@@ -120,6 +119,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     { name: 'Overview', path: '', icon: LayoutDashboard },
     { name: 'Leads', path: 'leads', icon: PhoneCall },
     { name: 'Members', path: 'members', icon: UserCog },
+    { name: 'Renewals', path: 'renewals', icon: RefreshCw },
     { name: 'Equipment', path: 'equipment', icon: Dumbbell },
     { name: 'Facilities', path: 'facilities', icon: Building2 },
     { name: 'Services', path: 'services', icon: Sparkles },
@@ -232,6 +232,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
           <Route index element={<Overview />} />
           <Route path="leads" element={<LeadsManager />} />
           <Route path="members" element={<MembersManager />} />
+          <Route path="renewals" element={<RenewalsManager />} />
           <Route path="settings" element={<GeneralSettingsManager />} />
           <Route path="equipment" element={<ServicesManager category="Equipment" />} />
           <Route path="facilities" element={<ServicesManager category="Facilities" />} />
@@ -261,16 +262,25 @@ function Overview() {
     tips: 0,
     faqs: 0
   });
+  const [pendingRenewals, setPendingRenewals] = useState(0);
+
+  // Renewal requests are not a content collection, so they come from the
+  // members API rather than the Firebase-shaped shim.
+  useEffect(() => {
+    adminRequest<{ pendingRenewals?: number }>('/api/admin/member-stats')
+      .then((s) => setPendingRenewals(s.pendingRenewals || 0))
+      .catch(() => { /* card just shows 0 */ });
+  }, []);
 
   useEffect(() => {
-    const unsubLeads = onSnapshot(query(collection(db, 'leads'), limit(100)), s => setStats(prev => ({ ...prev, leads: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'leads'));
-    const unsubServices = onSnapshot(query(collection(db, 'services'), limit(100)), s => setStats(prev => ({ ...prev, services: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'services'));
-    const unsubTrainers = onSnapshot(query(collection(db, 'trainers'), limit(100)), s => setStats(prev => ({ ...prev, trainers: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'trainers'));
-    const unsubGallery = onSnapshot(query(collection(db, 'gallery'), limit(100)), s => setStats(prev => ({ ...prev, gallery: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'gallery'));
-    const unsubTestimonials = onSnapshot(query(collection(db, 'testimonials'), limit(100)), s => setStats(prev => ({ ...prev, testimonials: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'testimonials'));
-    const unsubPricing = onSnapshot(query(collection(db, 'pricing'), limit(100)), s => setStats(prev => ({ ...prev, pricing: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'pricing'));
-    const unsubTips = onSnapshot(query(collection(db, 'health_tips'), limit(100)), s => setStats(prev => ({ ...prev, tips: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'health_tips'));
-    const unsubFAQs = onSnapshot(query(collection(db, 'faqs'), limit(100)), s => setStats(prev => ({ ...prev, faqs: s.size })), (err) => handleFirestoreError(err, OperationType.LIST, 'faqs'));
+    const unsubLeads = onSnapshot(query(collection(db, 'leads'), limit(100)), s => setStats(prev => ({ ...prev, leads: s.size })), (err) => handleDataError(err, OperationType.LIST, 'leads'));
+    const unsubServices = onSnapshot(query(collection(db, 'services'), limit(100)), s => setStats(prev => ({ ...prev, services: s.size })), (err) => handleDataError(err, OperationType.LIST, 'services'));
+    const unsubTrainers = onSnapshot(query(collection(db, 'trainers'), limit(100)), s => setStats(prev => ({ ...prev, trainers: s.size })), (err) => handleDataError(err, OperationType.LIST, 'trainers'));
+    const unsubGallery = onSnapshot(query(collection(db, 'gallery'), limit(100)), s => setStats(prev => ({ ...prev, gallery: s.size })), (err) => handleDataError(err, OperationType.LIST, 'gallery'));
+    const unsubTestimonials = onSnapshot(query(collection(db, 'testimonials'), limit(100)), s => setStats(prev => ({ ...prev, testimonials: s.size })), (err) => handleDataError(err, OperationType.LIST, 'testimonials'));
+    const unsubPricing = onSnapshot(query(collection(db, 'pricing'), limit(100)), s => setStats(prev => ({ ...prev, pricing: s.size })), (err) => handleDataError(err, OperationType.LIST, 'pricing'));
+    const unsubTips = onSnapshot(query(collection(db, 'health_tips'), limit(100)), s => setStats(prev => ({ ...prev, tips: s.size })), (err) => handleDataError(err, OperationType.LIST, 'health_tips'));
+    const unsubFAQs = onSnapshot(query(collection(db, 'faqs'), limit(100)), s => setStats(prev => ({ ...prev, faqs: s.size })), (err) => handleDataError(err, OperationType.LIST, 'faqs'));
     
     return () => { 
       unsubLeads(); unsubServices(); unsubTrainers(); unsubGallery(); 
@@ -280,6 +290,7 @@ function Overview() {
 
   const cards = [
     { name: 'Total Leads', value: stats.leads, icon: PhoneCall, color: 'bg-blue-500' },
+    { name: 'Pending Renewals', value: pendingRenewals, icon: RefreshCw, color: 'bg-amber-500' },
     { name: 'Services', value: stats.services, icon: Dumbbell, color: 'bg-[#FF003C]' },
     { name: 'Trainers', value: stats.trainers, icon: Users, color: 'bg-purple-500' },
     { name: 'Gallery Items', value: stats.gallery, icon: ImageIcon, color: 'bg-green-500' },
@@ -339,7 +350,7 @@ function GeneralSettingsManager() {
       } else {
         setSettings({ ...EMPTY_SETTINGS });
       }
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'settings'));
+    }, (err) => handleDataError(err, OperationType.LIST, 'settings'));
   }, []);
 
   const handleSave = async () => {
@@ -351,7 +362,7 @@ function GeneralSettingsManager() {
       await setDoc(doc(db, 'settings', id || 'general'), data, { merge: true });
       toast.success('General settings saved');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'settings');
+      handleDataError(error, OperationType.WRITE, 'settings');
     } finally {
       setIsSaving(false);
     }
@@ -563,7 +574,7 @@ function LeadsManager() {
   useEffect(() => {
     return onSnapshot(query(collection(db, 'leads'), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => {
       setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'leads'));
+    }, (err) => handleDataError(err, OperationType.LIST, 'leads'));
   }, []);
 
   const updateStatus = async (id: string, status: Lead['status']) => {
@@ -571,7 +582,7 @@ function LeadsManager() {
       await updateDoc(doc(db, 'leads', id), { status });
       toast.success('Status updated');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `leads/${id}`);
+      handleDataError(error, OperationType.UPDATE, `leads/${id}`);
     }
   };
 
@@ -582,7 +593,7 @@ function LeadsManager() {
       toast.success('Lead deleted');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDataError(error, OperationType.DELETE, path);
     }
   };
 
@@ -741,7 +752,7 @@ function ServicesManager({ category }: { category?: 'Equipment' | 'Facilities' |
 
     return onSnapshot(q, (snapshot) => {
       setServices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'services'));
+    }, (err) => handleDataError(err, OperationType.LIST, 'services'));
   }, [category]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -764,7 +775,7 @@ function ServicesManager({ category }: { category?: 'Equipment' | 'Facilities' |
         await Promise.all(batch);
         toast.success('Order updated');
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, 'services/reorder');
+        handleDataError(error, OperationType.UPDATE, 'services/reorder');
       }
     }
   };
@@ -786,7 +797,7 @@ function ServicesManager({ category }: { category?: 'Equipment' | 'Facilities' |
       setEditingService(null);
       toast.success('Saved successfully');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'services');
+      handleDataError(error, OperationType.WRITE, 'services');
     }
   };
 
@@ -796,7 +807,7 @@ function ServicesManager({ category }: { category?: 'Equipment' | 'Facilities' |
       toast.success('Deleted successfully');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `services/${id}`);
+      handleDataError(error, OperationType.DELETE, `services/${id}`);
     }
   };
 
@@ -961,7 +972,7 @@ function TrainersManager() {
     const path = 'trainers';
     return onSnapshot(query(collection(db, path), orderBy('order')), (snapshot) => {
       setTrainers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Trainer)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, path));
+    }, (error) => handleDataError(error, OperationType.LIST, path));
   }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -981,7 +992,7 @@ function TrainersManager() {
         await Promise.all(batch);
         toast.success('Order updated');
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, path);
+        handleDataError(error, OperationType.UPDATE, path);
       }
     }
   };
@@ -1003,7 +1014,7 @@ function TrainersManager() {
       setEditingTrainer(null);
       toast.success('Trainer saved');
     } catch (error) {
-      handleFirestoreError(error, editingTrainer.id ? OperationType.UPDATE : OperationType.CREATE, path);
+      handleDataError(error, editingTrainer.id ? OperationType.UPDATE : OperationType.CREATE, path);
     }
   };
 
@@ -1014,7 +1025,7 @@ function TrainersManager() {
       toast.success('Trainer deleted');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDataError(error, OperationType.DELETE, path);
     }
   };
 
@@ -1154,7 +1165,7 @@ function GalleryManager() {
     const path = 'gallery';
     return onSnapshot(query(collection(db, path), orderBy('order')), (snapshot) => {
       setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GalleryItem)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, path));
+    }, (error) => handleDataError(error, OperationType.LIST, path));
   }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1174,7 +1185,7 @@ function GalleryManager() {
         await Promise.all(batch);
         toast.success('Order updated');
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, path);
+        handleDataError(error, OperationType.UPDATE, path);
       }
     }
   };
@@ -1196,7 +1207,7 @@ function GalleryManager() {
       setEditingItem(null);
       toast.success('Gallery item saved');
     } catch (error) {
-      handleFirestoreError(error, editingItem.id ? OperationType.UPDATE : OperationType.CREATE, path);
+      handleDataError(error, editingItem.id ? OperationType.UPDATE : OperationType.CREATE, path);
     }
   };
 
@@ -1207,7 +1218,7 @@ function GalleryManager() {
       toast.success('Item deleted');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDataError(error, OperationType.DELETE, path);
     }
   };
 
@@ -1379,7 +1390,7 @@ function FAQManager() {
     const path = 'faqs';
     return onSnapshot(query(collection(db, path), orderBy('order')), (snapshot) => {
       setFaqs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FAQ)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, path));
+    }, (error) => handleDataError(error, OperationType.LIST, path));
   }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1399,7 +1410,7 @@ function FAQManager() {
         await Promise.all(batch);
         toast.success('Order updated');
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, path);
+        handleDataError(error, OperationType.UPDATE, path);
       }
     }
   };
@@ -1421,7 +1432,7 @@ function FAQManager() {
       setEditingFaq(null);
       toast.success('FAQ saved');
     } catch (error) {
-      handleFirestoreError(error, editingFaq.id ? OperationType.UPDATE : OperationType.CREATE, path);
+      handleDataError(error, editingFaq.id ? OperationType.UPDATE : OperationType.CREATE, path);
     }
   };
 
@@ -1432,7 +1443,7 @@ function FAQManager() {
       toast.success('FAQ deleted');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDataError(error, OperationType.DELETE, path);
     }
   };
 
@@ -1544,7 +1555,7 @@ function TestimonialsManager() {
     const path = 'testimonials';
     return onSnapshot(query(collection(db, path), orderBy('order')), (snapshot) => {
       setTestimonials(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Testimonial)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, path));
+    }, (error) => handleDataError(error, OperationType.LIST, path));
   }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1564,7 +1575,7 @@ function TestimonialsManager() {
         await Promise.all(batch);
         toast.success('Order updated');
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, path);
+        handleDataError(error, OperationType.UPDATE, path);
       }
     }
   };
@@ -1586,7 +1597,7 @@ function TestimonialsManager() {
       setEditingTestimonial(null);
       toast.success('Testimonial saved');
     } catch (error) {
-      handleFirestoreError(error, editingTestimonial.id ? OperationType.UPDATE : OperationType.CREATE, path);
+      handleDataError(error, editingTestimonial.id ? OperationType.UPDATE : OperationType.CREATE, path);
     }
   };
 
@@ -1597,7 +1608,7 @@ function TestimonialsManager() {
       toast.success('Testimonial deleted');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDataError(error, OperationType.DELETE, path);
     }
   };
 
@@ -1733,7 +1744,7 @@ function PricingManager() {
     const path = 'pricing';
     return onSnapshot(query(collection(db, path), orderBy('order')), (snapshot) => {
       setPlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PricingPlan)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, path));
+    }, (error) => handleDataError(error, OperationType.LIST, path));
   }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1753,7 +1764,7 @@ function PricingManager() {
         await Promise.all(batch);
         toast.success('Order updated');
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, path);
+        handleDataError(error, OperationType.UPDATE, path);
       }
     }
   };
@@ -1782,7 +1793,7 @@ function PricingManager() {
       setEditingPlan(null);
       toast.success('Pricing plan saved');
     } catch (error) {
-      handleFirestoreError(error, editingPlan.id ? OperationType.UPDATE : OperationType.CREATE, path);
+      handleDataError(error, editingPlan.id ? OperationType.UPDATE : OperationType.CREATE, path);
     }
   };
 
@@ -1793,7 +1804,7 @@ function PricingManager() {
       toast.success('Plan deleted');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDataError(error, OperationType.DELETE, path);
     }
   };
 
@@ -1940,7 +1951,7 @@ function TipsManager() {
     const path = 'health_tips';
     return onSnapshot(query(collection(db, path), orderBy('order')), (snapshot) => {
       setTips(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as HealthTip)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, path));
+    }, (error) => handleDataError(error, OperationType.LIST, path));
   }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1960,7 +1971,7 @@ function TipsManager() {
         await Promise.all(batch);
         toast.success('Order updated');
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, path);
+        handleDataError(error, OperationType.UPDATE, path);
       }
     }
   };
@@ -1986,7 +1997,7 @@ function TipsManager() {
       setEditingTip(null);
       toast.success('Health tip saved');
     } catch (error) {
-      handleFirestoreError(error, editingTip.id ? OperationType.UPDATE : OperationType.CREATE, path);
+      handleDataError(error, editingTip.id ? OperationType.UPDATE : OperationType.CREATE, path);
     }
   };
 
@@ -1997,7 +2008,7 @@ function TipsManager() {
       toast.success('Tip deleted');
       setConfirmDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDataError(error, OperationType.DELETE, path);
     }
   };
 

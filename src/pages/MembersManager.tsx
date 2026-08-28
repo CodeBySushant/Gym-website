@@ -12,25 +12,14 @@ import {
 import { toast } from 'sonner';
 import { Member, Payment, AttendanceRow, WorkoutPlan, DietPlan, Measurement, Trainer } from '../types';
 import { getDocs, collection, db } from '../api';
+import { adminRequest, J } from '../adminApi';
 import { cn } from '../lib/utils';
 import {
   Card, Stat, StatusPill, Button, Modal, Field, inputClass,
   Loading, EmptyState, fmtDate, fmtMoney,
 } from '../components/member/ui';
 
-// ---------- admin fetch helper (uses the admin token from api.ts) ----------
-async function adminRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { ...(options.headers as Record<string, string> | undefined) };
-  const token = (() => { try { return localStorage.getItem('admin_token'); } catch { return null; } })();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  if (options.body && typeof options.body === 'string') headers['Content-Type'] = 'application/json';
-  const res = await fetch(url, { ...options, headers });
-  let data: any = null;
-  try { data = await res.json(); } catch { /* no body */ }
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
-  return data as T;
-}
-const J = (b: unknown) => JSON.stringify(b);
+
 
 const EMPTY: Partial<Member> = {
   name: '', phone: '', email: '', planName: '', planStart: '', planExpiry: '',

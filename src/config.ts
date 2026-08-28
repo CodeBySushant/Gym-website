@@ -14,7 +14,10 @@ export const ADMIN_EMAIL = 'mesushant.official@gmail.com';
 // Brand name, split so the accent color can style the second part.
 export const BRAND = {
   first: 'Supermen',
+  // Full lockup — used in the footer and on printed invoices.
   accent: 'Fitness Gym',
+  // Compact lockup for the navbar, where horizontal space is tight.
+  accentShort: 'Fitness',
   full: 'Supermen Fitness Gym',
   city: 'Bhopal',
   tagline: "Nehru Nagar's home for serious training. Elite equipment, expert coaching, and a community that shows up.",

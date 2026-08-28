@@ -39,7 +39,7 @@ export default function Navbar() {
             <Dumbbell className="w-6 h-6 text-white" />
           </div>
           <span className="text-2xl font-black tracking-tighter uppercase italic">
-            {BRAND.first} <span className="text-[#FF003C]">{BRAND.accent}</span>
+            {BRAND.first} <span className="text-[#FF003C]">{BRAND.accentShort}</span>
           </span>
         </Link>
 
@@ -56,10 +56,11 @@ export default function Navbar() {
           ))}
           <Link
             to="/member/login"
-            className="flex items-center gap-2 border-2 border-[#FF003C] text-[#FF003C] px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest hover:bg-[#FF003C] hover:text-white transition-all duration-300"
+            title="Member login"
+            className="flex items-center gap-2 border-2 border-[#FF003C] text-[#FF003C] px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest hover:bg-[#FF003C] hover:text-white transition-all duration-300"
           >
             <UserCircle className="w-4 h-4" />
-            Member Login
+            Login
           </Link>
         </div>
 
@@ -95,7 +96,7 @@ export default function Navbar() {
                 className="flex items-center justify-center gap-2 mt-2 border-2 border-[#FF003C] text-[#FF003C] px-6 py-3 rounded-full text-sm font-black uppercase tracking-widest"
               >
                 <UserCircle className="w-4 h-4" />
-                Member Login
+                Login
               </Link>
             </div>
           </motion.div>

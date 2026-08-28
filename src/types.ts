@@ -19,6 +19,7 @@ export interface Setting {
   googleMapsUrl: string;
   openHours?: string;
   heroVideoUrl: string;
+  heroImageUrl?: string;
   servicesTitle?: string;
   servicesSubtitle?: string;
 }

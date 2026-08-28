@@ -321,6 +321,7 @@ const EMPTY_SETTINGS: Setting = {
   googleMapsUrl: '',
   openHours: '',
   heroVideoUrl: '',
+  heroImageUrl: '',
   servicesTitle: '',
   servicesSubtitle: '',
 };
@@ -328,6 +329,7 @@ const EMPTY_SETTINGS: Setting = {
 function GeneralSettingsManager() {
   const [settings, setSettings] = useState<Setting | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const { uploadImage } = useImageUpload();
 
   useEffect(() => {
     // Fixed document ID so the form works even on a brand-new empty database.
@@ -399,6 +401,47 @@ function GeneralSettingsManager() {
               onChange={(e) => setSettings({ ...settings, heroVideoUrl: e.target.value })}
               className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-[#FF003C] outline-none"
             />
+            <p className="text-[10px] text-white/30 font-medium mt-2">
+              Leave empty to use the background image below.
+            </p>
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Hero Background Image</label>
+            {settings.heroImageUrl && (
+              <div className="relative mb-3 rounded-xl overflow-hidden border border-white/10 aspect-[21/9] bg-black">
+                <img src={settings.heroImageUrl} alt="Hero background preview" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => setSettings({ ...settings, heroImageUrl: '' })}
+                  className="absolute top-2 right-2 bg-black/80 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                  aria-label="Remove hero background image"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <label className="block bg-black border border-dashed border-white/15 rounded-xl px-4 py-6 text-center cursor-pointer hover:border-[#FF003C] transition-colors">
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                {settings.heroImageUrl ? 'Replace Image' : 'Upload Image'}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const url = await uploadImage(file);
+                    setSettings({ ...settings, heroImageUrl: url });
+                  } catch { /* useImageUpload already shows a toast */ }
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <p className="text-[10px] text-white/30 font-medium mt-2 leading-relaxed">
+              Optional. Overrides the bundled desktop and mobile backgrounds with
+              one image. Keep the subject on the right &mdash; headline copy sits on the left.
+            </p>
           </div>
         </div>
 

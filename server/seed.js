@@ -35,6 +35,7 @@ const DATA = {
         'https://www.google.com/maps?q=Supermen+fitness+gym,+Nehru+Nagar,+Bhopal+462003&output=embed',
       openHours: 'Mon – Sat: 6:00 AM – 10:00 PM · Sunday Closed',
       heroVideoUrl: '',
+      heroImageUrl: '',
       servicesTitle: 'Elite Offerings',
       servicesSubtitle: 'World-class equipment, facilities and services under one roof',
     },

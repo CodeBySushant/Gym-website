@@ -8,6 +8,12 @@
     <meta name="theme-color" content="#FF003C" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+    <!-- Preload the hero background: it is the LCP element, and the browser
+         would otherwise not discover it until React has mounted. Each is
+         media-gated so phones never fetch the desktop crop. -->
+    <link rel="preload" as="image" href="/assets/background1.webp" media="(min-width: 768px)" />
+    <link rel="preload" as="image" href="/assets/phonebackground1.webp" media="(max-width: 767px)" />
+
     <!-- Open Graph / social sharing -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Supermen Fitness Gym — Fitness Center in Nehru Nagar, Bhopal" />

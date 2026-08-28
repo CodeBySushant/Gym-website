@@ -36,6 +36,14 @@ export const DEFAULTS = {
     'https://www.google.com/maps?q=Supermen+fitness+gym,+Nehru+Nagar,+Bhopal+462003&output=embed',
   openHours: 'Mon – Sat: 6:00 AM – 10:00 PM · Sunday Closed',
   heroVideoUrl: '',
+  /**
+   * Hero background photos. These live in public/, so the paths are
+   * root-absolute. Two crops are used: a wide one for desktop and a portrait
+   * one for phones, chosen by a <picture> media query in Hero.tsx.
+   * Both are overridden by Hero Background Image in Admin -> General Settings.
+   */
+  heroImage: '/assets/background1.webp',
+  heroImageMobile: '/assets/phonebackground1.webp',
 };
 
 // Contact email shown in the footer. Set to '' to hide.

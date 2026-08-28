@@ -81,7 +81,7 @@ export default function Hero({ settings }: HeroProps) {
         {/* Readability scrims.
             Mobile: vertical fade, since copy sits over the subject.
             Desktop: left-to-right fade, keeping the athlete clear on the right. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/55 to-black md:bg-gradient-to-r md:from-black md:via-black/60 md:to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-black/95 md:bg-gradient-to-r md:from-black md:via-black/60 md:to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
         {/* Faint brand wash so the photo reads as part of the site. */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,0,60,0.16),transparent_55%)]" />
@@ -93,18 +93,18 @@ export default function Hero({ settings }: HeroProps) {
         is invisible against a photograph.
       */}
       <div
-        className="absolute -bottom-2 md:-bottom-4 left-0 right-0 z-[1] overflow-hidden whitespace-nowrap opacity-[0.055] pointer-events-none select-none"
+        className="hidden md:block absolute bottom-12 left-0 right-0 z-[1] overflow-hidden whitespace-nowrap opacity-[0.07] pointer-events-none select-none"
         aria-hidden="true"
       >
-        <div className="text-[16vw] leading-none font-black italic uppercase text-white animate-marquee">
+        <div className="text-[9vw] leading-none font-black italic uppercase text-white animate-marquee">
           {`${BRAND.full} • ${DEFAULTS.heroHeadline} • ELITE FITNESS • ${BRAND.city} • `.repeat(2)}
         </div>
       </div>
 
       {/* LAYER 2 — content. Left-pinned on desktop so it never hits the athlete. */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 pt-28 pb-28 md:py-0">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 pt-24 pb-16 md:py-0">
         <div className="max-w-2xl text-center md:text-left">
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-5 gap-y-2 mb-6">
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-5 gap-y-2 mb-4 md:mb-6">
             <span className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/50">
               <MapPin className="w-3.5 h-3.5 text-[#FF003C]" />
               {BRAND.city}
@@ -129,7 +129,7 @@ export default function Hero({ settings }: HeroProps) {
               <Skeleton className="h-16 md:h-24 w-4/5 max-w-md" />
             </div>
           ) : (
-            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black italic tracking-tighter uppercase leading-[0.85] mb-6 text-balance drop-shadow-[0_4px_30px_rgba(0,0,0,0.95)]">
+            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black italic tracking-tighter uppercase leading-[0.85] mb-5 md:mb-6 text-balance drop-shadow-[0_4px_30px_rgba(0,0,0,0.95)]">
               {accentHeadline(headline).map(({ word, accent }, i) => (
                 <span key={i} className={accent ? 'text-[#FF003C]' : 'text-white'}>
                   {word}{' '}
@@ -144,22 +144,22 @@ export default function Hero({ settings }: HeroProps) {
           {isLoading ? (
             <Skeleton className="h-6 w-full max-w-md mb-10 mx-auto md:mx-0" />
           ) : (
-            <p className="text-base sm:text-lg md:text-xl text-white/75 mb-9 font-medium max-w-lg mx-auto md:mx-0 leading-relaxed text-pretty drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
+            <p className="text-base sm:text-lg md:text-xl text-white/75 mb-7 md:mb-9 font-medium max-w-lg mx-auto md:mx-0 leading-relaxed text-pretty drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
               {subline}
             </p>
           )}
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center md:justify-start gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center md:justify-start gap-3 sm:gap-4">
             <a
               href="#trial"
-              className="group bg-[#FF003C] text-white px-8 md:px-10 py-4 md:py-5 rounded-full text-base md:text-lg font-black uppercase tracking-widest hover:bg-white hover:text-[#FF003C] transition-all duration-300 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,0,60,0.4)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              className="group bg-[#FF003C] text-white px-8 md:px-10 py-3.5 md:py-5 rounded-full text-base md:text-lg font-black uppercase tracking-widest hover:bg-white hover:text-[#FF003C] transition-all duration-300 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,0,60,0.4)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
               Book Free Trial
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
             <a
               href="#pricing"
-              className="px-8 md:px-10 py-4 md:py-5 rounded-full text-base md:text-lg font-black uppercase tracking-widest border-2 border-white/25 bg-black/40 backdrop-blur-sm hover:border-white hover:bg-white/10 transition-all duration-300 text-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              className="px-8 md:px-10 py-3.5 md:py-5 rounded-full text-base md:text-lg font-black uppercase tracking-widest border-2 border-white/25 bg-black/40 backdrop-blur-sm hover:border-white hover:bg-white/10 transition-all duration-300 text-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
               View Plans
             </a>

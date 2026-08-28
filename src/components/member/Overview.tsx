@@ -21,6 +21,7 @@ export default function Overview({ onNavigate }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [renewOpen, setRenewOpen] = useState(false);
   const [renewNote, setRenewNote] = useState('');
+  const [renewPlan, setRenewPlan] = useState('');
   const [sending, setSending] = useState(false);
 
   const load = () => {
@@ -34,7 +35,8 @@ export default function Overview({ onNavigate }: Props) {
   const submitRenewal = async () => {
     setSending(true);
     try {
-      await requestRenewal(data?.member.planName || '', renewNote);
+      // Falls back to the current plan when the member leaves the field blank.
+      await requestRenewal(renewPlan.trim() || data?.member.planName || '', renewNote);
       toast.success('Renewal request sent. The gym will contact you shortly.');
       setRenewOpen(false);
       setRenewNote('');
@@ -43,6 +45,12 @@ export default function Overview({ onNavigate }: Props) {
     } finally {
       setSending(false);
     }
+  };
+
+  const openRenewal = () => {
+    setRenewPlan(data?.member.planName || '');
+    setRenewNote('');
+    setRenewOpen(true);
   };
 
   if (error) {
@@ -92,7 +100,7 @@ export default function Overview({ onNavigate }: Props) {
               </p>
             </div>
           </div>
-          <Button onClick={() => setRenewOpen(true)} className="flex-shrink-0">
+          <Button onClick={openRenewal} className="flex-shrink-0">
             Request Renewal <ArrowRight className="w-4 h-4" />
           </Button>
         </motion.div>
@@ -159,7 +167,7 @@ export default function Overview({ onNavigate }: Props) {
 
           {!needsRenewal && (
             <div className="mt-6">
-              <Button variant="ghost" onClick={() => setRenewOpen(true)}>
+              <Button variant="ghost" onClick={openRenewal}>
                 <RefreshCw className="w-4 h-4" /> Request Early Renewal
               </Button>
             </div>
@@ -250,10 +258,10 @@ export default function Overview({ onNavigate }: Props) {
           <Field label="Plan you want" hint="Leave blank to continue on your current plan.">
             <input
               className={inputClass}
-              defaultValue={member.planName || ''}
-              onChange={(e) => setRenewNote((n) => n)}
+              value={renewPlan}
+              onChange={(e) => setRenewPlan(e.target.value)}
               placeholder="e.g. Quarterly"
-              readOnly
+              maxLength={80}
             />
           </Field>
           <Field label="Anything to add? (optional)">

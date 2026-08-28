@@ -16,7 +16,7 @@ export default function Pricing({ plans }: PricingProps) {
   if (!isLoading && displayPlans.length === 0) return null;
 
   return (
-    <section id="pricing" className="py-24 bg-[#050505] overflow-hidden">
+    <section id="pricing" className="py-16 md:py-24 bg-[#050505] overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 mb-12 text-center">
         <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-4">
           Membership <span className="text-[#FF003C]">Tiers</span>
@@ -26,10 +26,10 @@ export default function Pricing({ plans }: PricingProps) {
         </p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
         {isLoading ? (
           [...Array(3)].map((_, i) => (
-            <div key={i} className="p-10 rounded-3xl bg-white/5 border border-white/10 space-y-6">
+            <div key={i} className="p-6 md:p-10 rounded-3xl bg-white/5 border border-white/10 space-y-5 md:space-y-6">
               <Skeleton className="h-8 w-32" />
               <div className="flex items-baseline gap-2">
                 <Skeleton className="h-12 w-32" />

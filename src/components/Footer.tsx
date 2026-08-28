@@ -56,9 +56,9 @@ export default function Footer({ settings }: FooterProps) {
   ];
 
   return (
-    <footer className="bg-[#050505] border-t border-white/10 py-20">
+    <footer className="bg-[#050505] border-t border-white/10 py-14 md:py-20 pb-28 md:pb-20">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-12 mb-10 md:mb-16">
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-2 mb-8">
               <div className="bg-[#FF003C] p-2 rounded-lg">

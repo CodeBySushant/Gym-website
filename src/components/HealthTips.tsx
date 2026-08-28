@@ -33,12 +33,12 @@ export default function HealthTips({ tips }: HealthTipsProps) {
   if (!isLoading && displayTips.length === 0) return null;
 
   return (
-    <section id="tips" className="py-24 bg-[#050505] relative overflow-hidden">
+    <section id="tips" className="py-16 md:py-24 bg-[#050505] relative overflow-hidden">
       {/* Background Accent */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#FF003C]/5 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="container mx-auto px-6 relative z-10">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10 md:mb-16">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -48,7 +48,7 @@ export default function HealthTips({ tips }: HealthTipsProps) {
               <Lightbulb className="w-5 h-5" />
               <span className="text-xs font-black uppercase tracking-[0.3em]">Expert Insights</span>
             </div>
-            <h2 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter leading-[0.9]">
+            <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter leading-[0.9]">
               Fuel Your <br />
               <span className="text-[#FF003C]">Ambition</span>
             </h2>
@@ -64,7 +64,7 @@ export default function HealthTips({ tips }: HealthTipsProps) {
           </motion.p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
           {isLoading ? (
             [...Array(3)].map((_, i) => (
               <div key={i} className="bg-white/5 rounded-[2rem] border border-white/10 overflow-hidden">
@@ -99,7 +99,7 @@ export default function HealthTips({ tips }: HealthTipsProps) {
                 </div>
               </div>
 
-              <div className="p-8 flex flex-col flex-grow">
+              <div className="p-6 md:p-8 flex flex-col flex-grow">
                 <h3 className="text-2xl font-black italic uppercase tracking-tight mb-4 group-hover:text-[#FF003C] transition-colors">
                   {tip.title}
                 </h3>

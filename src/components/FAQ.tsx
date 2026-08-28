@@ -31,7 +31,7 @@ export default function FAQ() {
   if (!isLoading && displayFaqs.length === 0) return null;
 
   return (
-    <section className="py-24 bg-black overflow-hidden">
+    <section className="py-16 md:py-24 bg-black overflow-hidden">
       <div className="max-w-3xl mx-auto px-6">
         <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-12 text-center">
           Common <span className="text-[#FF003C]">Questions</span>
@@ -49,9 +49,9 @@ export default function FAQ() {
             >
               <button
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                className="w-full px-8 py-6 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+                className="w-full px-6 md:px-8 py-5 md:py-6 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
               >
-                <span className="text-lg font-bold uppercase tracking-widest italic">{faq.question}</span>
+                <span className="text-base md:text-lg font-bold uppercase tracking-widest italic pr-4">{faq.question}</span>
                 {openIndex === i ? (
                   <Minus className="w-5 h-5 text-[#FF003C]" />
                 ) : (
@@ -67,7 +67,7 @@ export default function FAQ() {
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="px-8 pb-6 text-white/60 font-medium leading-relaxed">
+                    <div className="px-6 md:px-8 pb-5 md:pb-6 text-white/60 font-medium leading-relaxed">
                       {faq.answer}
                     </div>
                   </motion.div>

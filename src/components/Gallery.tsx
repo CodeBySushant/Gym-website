@@ -51,7 +51,7 @@ export default function Gallery({ items }: GalleryProps) {
   if (!isLoading && displayItems.length === 0) return null;
 
   return (
-    <section id="gallery" className="py-24 bg-[#050505] overflow-hidden">
+    <section id="gallery" className="py-16 md:py-24 bg-[#050505] overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 mb-12">
         <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-4">
           Inside <span className="text-[#FF003C]">{BRAND.first}</span>

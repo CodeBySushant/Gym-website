@@ -29,7 +29,7 @@ export default function Services({ services, settings }: ServicesProps) {
   if (!isLoading && (services?.length ?? 0) === 0) return null;
 
   return (
-    <section id="services" className="py-24 bg-black overflow-hidden">
+    <section id="services" className="py-16 md:py-24 bg-black overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 mb-12">
         <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-4 text-center">
           {settings?.servicesTitle?.split(' ').map((word, i, arr) => (

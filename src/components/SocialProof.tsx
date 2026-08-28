@@ -27,8 +27,8 @@ export default function SocialProof({ testimonials }: SocialProofProps) {
   if (!isLoading && displayTestimonials.length === 0) return null;
 
   return (
-    <section className="py-24 bg-[#050505] overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 mb-12 flex flex-col md:flex-row items-end justify-between gap-6">
+    <section className="py-16 md:py-24 bg-[#050505] overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6 mb-10 md:mb-12 flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
         <div>
           <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-4">
             Proof in <span className="text-[#FF003C]">Results</span>

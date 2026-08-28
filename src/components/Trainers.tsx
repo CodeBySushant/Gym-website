@@ -15,7 +15,7 @@ export default function Trainers({ trainers }: TrainersProps) {
   if (!isLoading && displayTrainers.length === 0) return null;
 
   return (
-    <section id="trainers" className="py-24 bg-black overflow-hidden">
+    <section id="trainers" className="py-16 md:py-24 bg-black overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 mb-12 text-center">
         <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-4">
           Meet Your <span className="text-[#FF003C]">Coaches</span>
@@ -25,12 +25,12 @@ export default function Trainers({ trainers }: TrainersProps) {
         </p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
         {isLoading ? (
           [...Array(3)].map((_, i) => (
             <div key={i} className="rounded-3xl overflow-hidden bg-white/5 border border-white/10">
-              <Skeleton className="aspect-[3/4] rounded-none" />
-              <div className="p-8 space-y-4">
+              <Skeleton className="aspect-[4/3] md:aspect-[3/4] rounded-none" />
+              <div className="p-6 md:p-8 space-y-4">
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-8 w-48" />
                 <Skeleton className="h-20 w-full" />
@@ -52,22 +52,22 @@ export default function Trainers({ trainers }: TrainersProps) {
             <OptimizedImage
               src={trainer.imageUrl}
               alt={trainer.name}
-              aspectRatio="aspect-[3/4]"
+              aspectRatio="aspect-[4/3] md:aspect-[3/4]"
               className="w-full"
               objectPosition="object-top"
             />
             
-            <div className="p-8">
+            <div className="p-6 md:p-8">
               <span className="text-xs font-black uppercase tracking-[0.3em] text-[#FF003C] mb-2 block">
                 {trainer.specialization}
               </span>
-              <h3 className="text-2xl font-black italic uppercase tracking-tighter mb-4">
+              <h3 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter mb-3 md:mb-4">
                 {trainer.name}
               </h3>
-              <p className="text-white/60 text-sm font-medium mb-6 leading-relaxed">
+              <p className="text-white/60 text-sm font-medium mb-4 md:mb-6 leading-relaxed">
                 {trainer.bio}
               </p>
-              <div className="pt-6 border-t border-white/10 italic text-white/80 text-sm">
+              <div className="pt-4 md:pt-6 border-t border-white/10 italic text-white/80 text-sm">
                 "{trainer.quote}"
               </div>
             </div>

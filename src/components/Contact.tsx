@@ -73,9 +73,9 @@ export default function Contact({ settings }: ContactProps) {
   };
 
   return (
-    <section id="contact" className="py-24 bg-black overflow-hidden">
+    <section id="contact" className="py-16 md:py-24 bg-black overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
           {/* Left: Info & Form */}
           <div id="trial">
             <motion.h2
@@ -93,7 +93,7 @@ export default function Contact({ settings }: ContactProps) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 onSubmit={handleSubmit}
-                className="bg-white/5 p-10 rounded-3xl border border-white/10 mb-12"
+                className="bg-white/5 p-6 md:p-10 rounded-3xl border border-white/10 mb-8 md:mb-12"
               >
                 <div className="space-y-6">
                   <div>

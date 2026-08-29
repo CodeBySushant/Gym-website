@@ -1,0 +1,62 @@
+# Netlify configuration — frontend only.
+#
+# The backend runs separately on Hostinger. Rather than rewriting every fetch
+# in the app to point at an absolute API host, Netlify proxies the API paths
+# through to it. The browser still sees same-origin requests, which means:
+#
+#   - no code changes: /api/... and /uploads/... keep working as written
+#   - no CORS setup on the backend
+#   - the signed progress-photo links at /api/photo/... keep working
+#
+# REPLACE api.supermenfitness.com BELOW with your real backend hostname.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# ---------------------------------------------------------------------------
+# API proxy. `status = 200` makes this a rewrite, not a redirect — the URL in
+# the address bar never changes and the browser never learns the backend host.
+# `force = true` ensures these win over the SPA fallback below.
+# ---------------------------------------------------------------------------
+[[redirects]]
+  from = "/api/*"
+  to = "https://api.supermenfitness.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/uploads/*"
+  to = "https://api.supermenfitness.com/uploads/:splat"
+  status = 200
+  force = true
+
+# ---------------------------------------------------------------------------
+# SPA fallback. React Router owns /admin/*, /member, /privacy and /terms, and
+# none of those exist as files — without this, a hard refresh on any of them
+# returns Netlify's 404 page. Must come LAST: Netlify applies the first match.
+# ---------------------------------------------------------------------------
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ---------------------------------------------------------------------------
+# Security headers. The backend sets its own via helmet for API responses;
+# these cover the static frontend Netlify serves.
+# ---------------------------------------------------------------------------
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    X-Frame-Options = "DENY"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

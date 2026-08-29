@@ -260,6 +260,29 @@ async function normalizeImage(filePath, presetName) {
   return path.basename(output);
 }
 
+/**
+ * Health check + proxy diagnostic.
+ *
+ * `ip` is the important field when the frontend sits behind a proxy. Every
+ * request then arrives from the proxy's edge, so if TRUST_PROXY is set too low
+ * the rate limiters bucket ALL visitors together — one person's failed logins
+ * would lock out the gym owner, and the 5-per-hour lead limit would apply
+ * across the whole site rather than per visitor.
+ *
+ * Open this in a browser after deploying. If `ip` is your own address, the
+ * setting is right. If it is a datacentre address, raise TRUST_PROXY by one
+ * and check again.
+ */
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    ip: req.ip,
+    trustProxy: app.get('trust proxy'),
+    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    time: new Date().toISOString(),
+  });
+});
+
 // ------------------------- Auth -------------------------
 function signToken() {
   return jwt.sign({ email: ADMIN_EMAIL, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });

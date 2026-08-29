@@ -12,7 +12,6 @@ import HealthTips from '../components/HealthTips';
 import Contact from '../components/Contact';
 import FAQ from '../components/FAQ';
 import Footer from '../components/Footer';
-import StickyCTA from '../components/StickyCTA';
 
 // Bump this when the data shape changes to invalidate old caches.
 const CACHE_VERSION = 'v2';
@@ -110,7 +109,6 @@ export default function PublicSite() {
         <Contact settings={settings} />
       </main>
       <Footer settings={settings} />
-      <StickyCTA settings={settings} />
     </div>
   );
 }

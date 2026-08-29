@@ -1,16 +1,16 @@
 /**
  * Admin → Members
  *
- * The counterpart to the member portal: create members, record attendance and
+ * The counterpart to the member portal: create members, record
  * payments, assign workout/diet plans, and see everything about one person.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Plus, Search, Trash2, Edit2, KeyRound, CalendarCheck, Wallet, Dumbbell,
+  Plus, Search, Trash2, Edit2, KeyRound, Wallet, Dumbbell,
   Apple, X, Users, UserPlus, RefreshCw, Check, Ruler, Camera, User,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Member, Payment, AttendanceRow, WorkoutPlan, DietPlan, Measurement, Trainer } from '../types';
+import { Member, Payment, WorkoutPlan, DietPlan, Measurement, Trainer } from '../types';
 import { getDocs, collection, db, uploadImageToStorage } from '../api';
 import { adminRequest, J } from '../adminApi';
 import { cn } from '../lib/utils';
@@ -129,12 +129,11 @@ export default function MembersManager() {
       </header>
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Stat icon={Users} label="Total" value={stats.total} />
           <Stat icon={Check} label="Active" value={stats.active} tone="success" delay={0.05} />
           <Stat icon={RefreshCw} label="Expiring" value={stats.expiring} tone="warning" delay={0.1} />
           <Stat icon={X} label="Expired" value={stats.expired} tone="danger" delay={0.15} />
-          <Stat icon={CalendarCheck} label="In Today" value={stats.checkedInToday} tone="accent" delay={0.2} className="col-span-2 lg:col-span-1" />
         </div>
       )}
 
@@ -308,7 +307,7 @@ export default function MembersManager() {
       <Modal open={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Delete Member">
         <p className="text-sm text-white/50 mb-8 leading-relaxed">
           This permanently removes <span className="text-white font-bold">{confirmDelete?.name}</span> along with
-          all their attendance, payments, plans, measurements and photos. This cannot be undone.
+          all their payments, plans, measurements and photos. This cannot be undone.
         </p>
         <div className="flex gap-3">
           <Button variant="ghost" onClick={() => setConfirmDelete(null)} className="flex-1">Cancel</Button>
@@ -324,25 +323,13 @@ export default function MembersManager() {
 /* ============================ Member detail ============================ */
 function MemberDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const [data, setData] = useState<any>(null);
-  const [tab, setTab] = useState<'attendance' | 'payments' | 'workout' | 'diet' | 'body'>('attendance');
+  const [tab, setTab] = useState<'payments' | 'workout' | 'diet' | 'body'>('payments');
   const [busy, setBusy] = useState(false);
 
   const load = () => { adminRequest<any>(`/api/admin/members/${id}/detail`).then(setData).catch((e) => toast.error(e.message)); };
   useEffect(load, [id]);
 
-  const markAttendance = async () => {
-    setBusy(true);
-    try {
-      await adminRequest('/api/admin/attendance', { method: 'POST', body: J({ memberId: id }) });
-      toast.success('Attendance marked');
-      load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not mark');
-    } finally { setBusy(false); }
-  };
-
   const TABS = [
-    { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'payments', label: 'Payments', icon: Wallet },
     { id: 'workout', label: 'Workout', icon: Dumbbell },
     { id: 'diet', label: 'Diet', icon: Apple },
@@ -360,9 +347,8 @@ function MemberDetail({ id, onClose }: { id: string; onClose: () => void }) {
             <span className="text-xs text-white/40">{data.member.planName || 'No plan'} · expires {fmtDate(data.member.planExpiry)}</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <Card className="p-4 text-center"><div className="text-2xl font-black italic">{data.attendanceSummary.streak}</div><div className="text-[9px] font-black uppercase tracking-widest text-white/30 mt-1">Streak</div></Card>
-            <Card className="p-4 text-center"><div className="text-2xl font-black italic">{data.attendanceSummary.thisMonth}</div><div className="text-[9px] font-black uppercase tracking-widest text-white/30 mt-1">This Month</div></Card>
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="p-4 text-center"><div className="text-2xl font-black italic">{data.payments.length}</div><div className="text-[9px] font-black uppercase tracking-widest text-white/30 mt-1">Payments</div></Card>
             <Card className="p-4 text-center"><div className="text-2xl font-black italic">{fmtMoney(data.payments.reduce((s: number, p: Payment) => s + (Number(p.amount) || 0), 0))}</div><div className="text-[9px] font-black uppercase tracking-widest text-white/30 mt-1">Total Paid</div></Card>
           </div>
 
@@ -375,26 +361,6 @@ function MemberDetail({ id, onClose }: { id: string; onClose: () => void }) {
               </button>
             ))}
           </div>
-
-          {tab === 'attendance' && (
-            <div>
-              <Button onClick={markAttendance} disabled={busy} className="mb-4">
-                <CalendarCheck className="w-4 h-4" /> {busy ? 'Marking…' : 'Mark Present Today'}
-              </Button>
-              {data.attendance.length === 0 ? (
-                <p className="text-sm text-white/30 py-6 text-center">No attendance recorded yet.</p>
-              ) : (
-                <ul className="divide-y divide-white/5 max-h-64 overflow-y-auto custom-scrollbar">
-                  {data.attendance.map((a: AttendanceRow) => (
-                    <li key={a.id} className="py-3 flex justify-between text-sm">
-                      <span className="text-white/70">{fmtDate(a.date)}</span>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400/70">Present</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
 
           {tab === 'payments' && <PaymentsTab memberId={id} payments={data.payments} onSaved={load} />}
           {tab === 'workout' && <PlanTab kind="workout" memberId={id} plan={data.workoutPlan} onSaved={load} />}

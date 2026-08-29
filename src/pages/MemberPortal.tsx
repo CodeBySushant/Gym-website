@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  LayoutDashboard, CalendarCheck, Wallet, Dumbbell, Apple, TrendingUp,
-  CalendarDays, LogOut, Menu, X, KeyRound, Home, User,
+  LayoutDashboard, Wallet, Dumbbell, Apple, TrendingUp,
+  LogOut, Menu, X, KeyRound, Home, User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Member } from '../types';
@@ -12,20 +12,16 @@ import { BRAND } from '../config';
 import { cn } from '../lib/utils';
 import { Modal, Field, inputClass, Button, StatusPill } from '../components/member/ui';
 import Overview from '../components/member/Overview';
-import Attendance from '../components/member/Attendance';
 import Payments from '../components/member/Payments';
 import Workout from '../components/member/Workout';
 import Diet from '../components/member/Diet';
 import Progress from '../components/member/Progress';
-import Schedule from '../components/member/Schedule';
 
 const TABS = [
   { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'workout', label: 'Workout Plan', icon: Dumbbell },
   { id: 'diet', label: 'Diet Plan', icon: Apple },
   { id: 'progress', label: 'Progress', icon: TrendingUp },
-  { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
-  { id: 'schedule', label: 'Classes & PT', icon: CalendarDays },
   { id: 'payments', label: 'Payments', icon: Wallet },
 ];
 
@@ -77,8 +73,6 @@ export default function MemberPortal({ member }: { member: Member }) {
     workout: <Workout />,
     diet: <Diet />,
     progress: <Progress />,
-    attendance: <Attendance />,
-    schedule: <Schedule />,
     payments: <Payments member={member} />,
   };
 

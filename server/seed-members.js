@@ -61,18 +61,6 @@ async function main() {
   const memberId = member._id.toString();
   console.log('[seed:members] Created member');
 
-  // --- Attendance: ~4 visits/week for the last 20 weeks, with a live streak ---
-  const attendance = [];
-  for (let i = 0; i < 140; i++) {
-    const d = daysAgo(i);
-    const dow = d.getDay();
-    if (dow === 0) continue;                 // gym closed Sunday
-    if (i > 3 && Math.random() > 0.62) continue; // realistic gaps, but keep a current streak
-    attendance.push({ memberId, date: d, markedBy: 'admin' });
-  }
-  await model('attendance').insertMany(attendance);
-  console.log(`[seed:members] ${attendance.length} attendance records`);
-
   // --- Payments ---
   await model('payments').insertMany([
     {
@@ -182,26 +170,6 @@ async function main() {
   }
   await model('measurements').insertMany(measurements);
   console.log(`[seed:members] ${measurements.length} measurements`);
-
-  // --- Classes (gym-wide) ---
-  const Classes = model('classes');
-  if ((await Classes.countDocuments()) === 0) {
-    await Classes.insertMany([
-      { name: 'Morning HIIT', day: 'Monday', time: '6:30 AM', trainerName: 'Priya Sharma', capacity: 15, order: 1, active: true, description: 'High-intensity intervals to start the week. Bring water.' },
-      { name: 'Strength Basics', day: 'Tuesday', time: '7:00 PM', trainerName: 'Arjun Verma', capacity: 12, order: 2, active: true, description: 'Squat, bench and deadlift technique for beginners.' },
-      { name: 'Core & Mobility', day: 'Wednesday', time: '6:30 AM', trainerName: 'Priya Sharma', capacity: 20, order: 3, active: true, description: 'Low-impact session focused on core stability and hip mobility.' },
-      { name: 'Functional Circuit', day: 'Thursday', time: '7:00 PM', trainerName: 'Rahul Singh', capacity: 15, order: 4, active: true, description: 'Kettlebells, sleds and bodyweight in a timed circuit.' },
-      { name: 'Weekend Bootcamp', day: 'Saturday', time: '8:00 AM', trainerName: 'Arjun Verma', capacity: 25, order: 5, active: true, description: 'Full-body conditioning. Our busiest class — book early.' },
-    ]);
-    console.log('[seed:members] 5 classes');
-  }
-
-  // --- PT sessions ---
-  await model('pt_sessions').insertMany([
-    { memberId, date: daysAhead(2), time: '7:00 PM', trainerName: trainer?.name || 'Arjun Verma', focus: 'Deadlift technique', status: 'scheduled' },
-    { memberId, date: daysAhead(9), time: '7:00 PM', trainerName: trainer?.name || 'Arjun Verma', focus: 'Upper body strength', status: 'scheduled' },
-    { memberId, date: daysAgo(5), time: '7:00 PM', trainerName: trainer?.name || 'Arjun Verma', focus: 'Squat depth work', status: 'completed' },
-  ]);
 
   await mongoose.disconnect();
   console.log(`

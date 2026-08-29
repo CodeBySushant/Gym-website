@@ -2,7 +2,7 @@
  * Supermen Fitness Gym — Member Portal API
  *
  * Everything a logged-in member can see about themselves, plus the admin-side
- * routes for managing members, attendance, payments and plans.
+ * routes for managing members, payments and plans.
  *
  * SECURITY MODEL
  * --------------
@@ -37,16 +37,12 @@ function looseSchema(indexes = {}) {
 
 const M = {
   members: mongoose.model('members', looseSchema({ phone: 1 }), 'members'),
-  attendance: mongoose.model('attendance', looseSchema({ memberId: 1, date: -1 }), 'attendance'),
   payments: mongoose.model('payments', looseSchema({ memberId: 1, date: -1 }), 'payments'),
   workout_plans: mongoose.model('workout_plans', looseSchema({ memberId: 1 }), 'workout_plans'),
   diet_plans: mongoose.model('diet_plans', looseSchema({ memberId: 1 }), 'diet_plans'),
   measurements: mongoose.model('measurements', looseSchema({ memberId: 1, date: -1 }), 'measurements'),
   workout_logs: mongoose.model('workout_logs', looseSchema({ memberId: 1, date: -1 }), 'workout_logs'),
   progress_photos: mongoose.model('progress_photos', looseSchema({ memberId: 1, date: -1 }), 'progress_photos'),
-  classes: mongoose.model('classes', looseSchema(), 'classes'),
-  class_bookings: mongoose.model('class_bookings', looseSchema({ memberId: 1 }), 'class_bookings'),
-  pt_sessions: mongoose.model('pt_sessions', looseSchema({ memberId: 1, date: 1 }), 'pt_sessions'),
   renewal_requests: mongoose.model('renewal_requests', looseSchema({ memberId: 1 }), 'renewal_requests'),
   counters: mongoose.model('counters', looseSchema(), 'counters'),
 };
@@ -109,13 +105,6 @@ function dayKey(dateish) {
   return DAY_FMT.format(d); // en-CA formats as YYYY-MM-DD
 }
 
-/** The day before a 'YYYY-MM-DD' key. Used to walk an attendance streak back. */
-function previousDay(key) {
-  const d = new Date(`${key}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
 /** Milliseconds to add to a UTC instant to get the gym's wall-clock time. */
 function tzOffsetMs(instant) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -157,22 +146,6 @@ function membershipStatus(member) {
   if (left < 0) return 'expired';
   if (left <= 7) return 'expiring';
   return 'active';
-}
-
-/** Attendance streak + this-month count, computed from raw attendance rows. */
-function attendanceSummary(rows) {
-  const days = new Set(rows.map((r) => dayKey(r.date)));
-  let streak = 0;
-  let cursor = dayKey();
-  // Today not yet visited shouldn't break a streak that ran through yesterday.
-  if (!days.has(cursor)) cursor = previousDay(cursor);
-  while (days.has(cursor)) {
-    streak += 1;
-    cursor = previousDay(cursor);
-  }
-  const thisMonthKey = dayKey().slice(0, 7); // 'YYYY-MM'
-  const thisMonth = rows.filter((r) => dayKey(r.date)?.startsWith(thisMonthKey)).length;
-  return { total: rows.length, thisMonth, streak };
 }
 
 /**
@@ -386,11 +359,9 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const id = req.memberDoc._id.toString();
       const m = req.memberDoc.toJSON();
 
-      const [attendance, payments, measurements, ptSessions, workoutLogs] = await Promise.all([
-        M.attendance.find({ memberId: id }).sort({ date: -1 }).limit(400),
+      const [payments, measurements, workoutLogs] = await Promise.all([
         M.payments.find({ memberId: id }).sort({ date: -1 }).limit(50),
         M.measurements.find({ memberId: id }).sort({ date: -1 }).limit(24),
-        M.pt_sessions.find({ memberId: id, status: { $ne: 'cancelled' } }).sort({ date: 1 }).limit(20),
         M.workout_logs.find({ memberId: id }).sort({ date: -1 }).limit(60),
       ]);
 
@@ -400,7 +371,6 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         if (T) trainer = await T.findById(m.trainerId);
       }
 
-      const upcomingPt = ptSessions.filter((s) => new Date(s.date) >= dayRange(new Date()).start);
       const latest = measurements[0] || null;
       const previous = measurements[1] || null;
 
@@ -409,24 +379,12 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         status: membershipStatus(m),
         daysLeft: daysUntil(m.planExpiry),
         trainer: trainer ? trainer.toJSON() : null,
-        attendance: attendanceSummary(attendance),
         lastPayment: payments[0] || null,
         totalPaid: payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
         latestMeasurement: latest,
         weightChange: latest && previous ? Number(latest.weight) - Number(previous.weight) : null,
-        upcomingPtCount: upcomingPt.length,
-        nextPtSession: upcomingPt[0] || null,
         workoutsLogged: workoutLogs.length,
       });
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.get('/member/attendance', ...memberOnly, async (req, res) => {
-    try {
-      const rows = await M.attendance.find({ memberId: req.memberDoc._id.toString() }).sort({ date: -1 }).limit(400);
-      res.json({ rows, summary: attendanceSummary(rows) });
     } catch (e) {
       fail(res, e);
     }
@@ -581,48 +539,6 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     });
   });
 
-  router.get('/member/schedule', ...memberOnly, async (req, res) => {
-    try {
-      const memberId = req.memberDoc._id.toString();
-      const [classes, bookings, ptSessions] = await Promise.all([
-        M.classes.find({ active: { $ne: false } }).sort({ order: 1 }).limit(60),
-        M.class_bookings.find({ memberId }).limit(200),
-        M.pt_sessions.find({ memberId }).sort({ date: 1 }).limit(60),
-      ]);
-      const bookedIds = new Set(bookings.map((b) => String(b.classId)));
-      res.json({
-        classes: classes.map((c) => ({ ...c.toJSON(), booked: bookedIds.has(c._id.toString()) })),
-        ptSessions,
-      });
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.post('/member/classes/:id/book', ...memberOnly, async (req, res) => {
-    try {
-      if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid class' });
-      const memberId = req.memberDoc._id.toString();
-      const classId = req.params.id;
-      const cls = await M.classes.findById(classId);
-      if (!cls) return res.status(404).json({ error: 'Class not found' });
-
-      const existing = await M.class_bookings.findOne({ memberId, classId });
-      if (existing) {
-        await M.class_bookings.deleteOne({ _id: existing._id });
-        return res.json({ booked: false });
-      }
-      const capacity = Number(cls.capacity) || 0;
-      if (capacity > 0 && (await M.class_bookings.countDocuments({ classId })) >= capacity) {
-        return res.status(409).json({ error: 'This class is full' });
-      }
-      await M.class_bookings.create({ memberId, classId, createdAt: new Date() });
-      res.status(201).json({ booked: true });
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
   router.post('/member/renewal-request', ...memberOnly, async (req, res) => {
     try {
       const memberId = req.memberDoc._id.toString();
@@ -748,15 +664,12 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const memberId = req.params.id;
       await Promise.all([
         M.members.findByIdAndDelete(memberId),
-        M.attendance.deleteMany({ memberId }),
         M.payments.deleteMany({ memberId }),
         M.workout_plans.deleteMany({ memberId }),
         M.diet_plans.deleteMany({ memberId }),
         M.measurements.deleteMany({ memberId }),
         M.workout_logs.deleteMany({ memberId }),
         M.progress_photos.deleteMany({ memberId }),
-        M.class_bookings.deleteMany({ memberId }),
-        M.pt_sessions.deleteMany({ memberId }),
         M.renewal_requests.deleteMany({ memberId }),
       ]);
       res.json({ ok: true });
@@ -773,60 +686,28 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
       const member = await M.members.findById(memberId);
       if (!member) return res.status(404).json({ error: 'Not found' });
 
-      const [attendance, payments, workoutPlan, dietPlan, measurements, photos, ptSessions] = await Promise.all([
-        M.attendance.find({ memberId }).sort({ date: -1 }).limit(200),
+      const [payments, workoutPlan, dietPlan, measurements, photos] = await Promise.all([
         M.payments.find({ memberId }).sort({ date: -1 }).limit(100),
         M.workout_plans.findOne({ memberId }),
         M.diet_plans.findOne({ memberId }),
         M.measurements.find({ memberId }).sort({ date: -1 }).limit(100),
         M.progress_photos.find({ memberId }).sort({ date: -1 }).limit(100),
-        M.pt_sessions.find({ memberId }).sort({ date: 1 }).limit(100),
       ]);
       const m = member.toJSON();
       res.json({
         member: { ...m, status: membershipStatus(m), daysLeft: daysUntil(m.planExpiry) },
-        attendance,
-        attendanceSummary: attendanceSummary(attendance),
         payments,
         workoutPlan,
         dietPlan,
         measurements,
         photos: photos.map(withPhotoUrl),
-        ptSessions,
       });
     } catch (e) {
       fail(res, e);
     }
   });
 
-  // ===================== ADMIN: ATTENDANCE / PAYMENTS / PLANS =====================
-  router.post('/admin/attendance', ...adminOnly, async (req, res) => {
-    try {
-      const memberId = String(req.body?.memberId || '');
-      if (!isValidId(memberId)) return res.status(400).json({ error: 'Invalid member' });
-      const date = req.body?.date ? new Date(req.body.date) : new Date();
-      if (Number.isNaN(date.getTime())) return res.status(400).json({ error: 'Invalid date' });
-
-      const { start: dayStart, end: dayEnd } = dayRange(date);
-      if (await M.attendance.findOne({ memberId, date: { $gte: dayStart, $lt: dayEnd } })) {
-        return res.status(409).json({ error: 'Attendance already marked for this day' });
-      }
-      res.status(201).json(await M.attendance.create({ memberId, date, markedBy: 'admin' }));
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.delete('/admin/attendance/:id', ...adminOnly, async (req, res) => {
-    try {
-      if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
-      await M.attendance.findByIdAndDelete(req.params.id);
-      res.json({ ok: true });
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
+  // ===================== ADMIN: PAYMENTS / PLANS =====================
   router.post('/admin/payments', ...adminOnly, async (req, res) => {
     try {
       const memberId = String(req.body?.memberId || '');
@@ -928,92 +809,7 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
     }
   });
 
-  // ===================== ADMIN: CLASSES / PT / RENEWALS =====================
-  router.get('/admin/classes', ...adminOnly, async (_req, res) => {
-    try {
-      const rows = await M.classes.find().sort({ order: 1 }).limit(100);
-      const counts = await M.class_bookings.aggregate([{ $group: { _id: '$classId', n: { $sum: 1 } } }]);
-      const map = new Map(counts.map((c) => [String(c._id), c.n]));
-      res.json(rows.map((r) => ({ ...r.toJSON(), booked: map.get(r._id.toString()) || 0 })));
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.post('/admin/classes', ...adminOnly, async (req, res) => {
-    try {
-      res.status(201).json(await M.classes.create(sanitize({ ...req.body, createdAt: new Date() })));
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.patch('/admin/classes/:id', ...adminOnly, async (req, res) => {
-    try {
-      if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
-      const row = await M.classes.findByIdAndUpdate(req.params.id, { $set: sanitize(req.body) }, { new: true });
-      if (!row) return res.status(404).json({ error: 'Not found' });
-      res.json(row);
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.delete('/admin/classes/:id', ...adminOnly, async (req, res) => {
-    try {
-      if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
-      await Promise.all([
-        M.classes.findByIdAndDelete(req.params.id),
-        M.class_bookings.deleteMany({ classId: req.params.id }),
-      ]);
-      res.json({ ok: true });
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.post('/admin/pt-sessions', ...adminOnly, async (req, res) => {
-    try {
-      const memberId = String(req.body?.memberId || '');
-      if (!isValidId(memberId)) return res.status(400).json({ error: 'Invalid member' });
-      const date = req.body?.date ? new Date(req.body.date) : null;
-      if (!date || Number.isNaN(date.getTime())) return res.status(400).json({ error: 'A valid date is required' });
-      res.status(201).json(await M.pt_sessions.create(sanitize({
-        memberId,
-        date,
-        time: String(req.body?.time || '').slice(0, 20),
-        trainerName: String(req.body?.trainerName || '').slice(0, 80),
-        focus: String(req.body?.focus || '').slice(0, 120),
-        status: 'scheduled',
-      })));
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.patch('/admin/pt-sessions/:id', ...adminOnly, async (req, res) => {
-    try {
-      if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
-      const allowed = {};
-      if (['scheduled', 'completed', 'cancelled'].includes(req.body?.status)) allowed.status = req.body.status;
-      const row = await M.pt_sessions.findByIdAndUpdate(req.params.id, { $set: allowed }, { new: true });
-      if (!row) return res.status(404).json({ error: 'Not found' });
-      res.json(row);
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
-  router.delete('/admin/pt-sessions/:id', ...adminOnly, async (req, res) => {
-    try {
-      if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
-      await M.pt_sessions.findByIdAndDelete(req.params.id);
-      res.json({ ok: true });
-    } catch (e) {
-      fail(res, e);
-    }
-  });
-
+  // ===================== ADMIN: RENEWALS =====================
   router.get('/admin/renewal-requests', ...adminOnly, async (_req, res) => {
     try {
       res.json(await M.renewal_requests.find().sort({ createdAt: -1 }).limit(200));
@@ -1044,8 +840,6 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
         const s = membershipStatus(r.toJSON());
         if (stats[s] !== undefined) stats[s] += 1;
       }
-      const { start: dayStart, end: dayEnd } = dayRange(new Date());
-      stats.checkedInToday = await M.attendance.countDocuments({ date: { $gte: dayStart, $lt: dayEnd } });
       stats.pendingRenewals = await M.renewal_requests.countDocuments({ status: 'pending' });
       res.json(stats);
     } catch (e) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Flame, CalendarCheck, Wallet, TrendingDown, TrendingUp, Dumbbell,
+  Wallet, TrendingDown, TrendingUp, Dumbbell,
   ShieldCheck, Clock, User, ArrowRight, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -63,7 +63,7 @@ export default function Overview({ onNavigate }: Props) {
   }
   if (!data) return <Loading label="Loading your dashboard" />;
 
-  const { member, status, daysLeft, trainer, attendance, weightChange, latestMeasurement } = data;
+  const { member, status, daysLeft, trainer, weightChange, latestMeasurement } = data;
   const firstName = member.name?.split(' ')[0] || 'Member';
   const needsRenewal = status === 'expired' || status === 'expiring';
 
@@ -107,22 +107,7 @@ export default function Overview({ onNavigate }: Props) {
       )}
 
       {/* Key stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-        <Stat
-          icon={Flame}
-          label="Current Streak"
-          value={attendance.streak}
-          sub={attendance.streak === 1 ? 'day in a row' : 'days in a row'}
-          tone={attendance.streak >= 3 ? 'accent' : 'default'}
-          delay={0}
-        />
-        <Stat
-          icon={CalendarCheck}
-          label="This Month"
-          value={attendance.thisMonth}
-          sub={`${attendance.total} visits all time`}
-          delay={0.05}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-8">
         <Stat
           icon={weightChange !== null && weightChange < 0 ? TrendingDown : TrendingUp}
           label="Current Weight"
@@ -133,7 +118,7 @@ export default function Overview({ onNavigate }: Props) {
               : 'No entries yet'
           }
           tone={weightChange !== null && weightChange < 0 ? 'success' : 'default'}
-          delay={0.1}
+          delay={0}
         />
         <Stat
           icon={ShieldCheck}
@@ -141,7 +126,7 @@ export default function Overview({ onNavigate }: Props) {
           value={daysLeft !== null && daysLeft > 0 ? daysLeft : 0}
           sub={member.planExpiry ? `until ${fmtDate(member.planExpiry)}` : 'no plan set'}
           tone={status === 'expired' ? 'danger' : status === 'expiring' ? 'warning' : 'success'}
-          delay={0.15}
+          delay={0.05}
         />
       </div>
 
@@ -211,30 +196,15 @@ export default function Overview({ onNavigate }: Props) {
             </div>
           )}
 
-          {data.nextPtSession && (
-            <button
-              onClick={() => onNavigate('schedule')}
-              className="mt-6 w-full text-left bg-[#FF003C]/10 border border-[#FF003C]/25 rounded-2xl p-4 hover:border-[#FF003C]/50 transition-colors"
-            >
-              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF003C] mb-1">
-                Next PT Session
-              </div>
-              <div className="text-sm font-bold">
-                {fmtDate(data.nextPtSession.date)}
-                {data.nextPtSession.time ? ` · ${data.nextPtSession.time}` : ''}
-              </div>
-            </button>
-          )}
         </Card>
       </div>
 
       {/* Quick links */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
         {[
           { tab: 'workout', icon: Dumbbell, label: 'Workout Plan' },
           { tab: 'progress', icon: TrendingUp, label: 'Log Progress' },
           { tab: 'payments', icon: Wallet, label: 'Invoices' },
-          { tab: 'schedule', icon: CalendarCheck, label: 'Book a Class' },
         ].map(({ tab, icon: Icon, label }) => (
           <button
             key={tab}

@@ -126,19 +126,6 @@ export interface Member {
   daysLeft?: number | null;
 }
 
-export interface AttendanceRow {
-  id?: string;
-  memberId: string;
-  date: string;
-  markedBy?: string;
-}
-
-export interface AttendanceSummary {
-  total: number;
-  thisMonth: number;
-  streak: number;
-}
-
 export interface Payment {
   id?: string;
   memberId: string;
@@ -226,32 +213,6 @@ export interface ProgressPhoto {
   date: string;
 }
 
-export interface GymClass {
-  id?: string;
-  name: string;
-  day: string;
-  time: string;
-  trainerName?: string;
-  description?: string;
-  capacity?: number;
-  order?: number;
-  active?: boolean;
-  /** Present on member-facing responses only. */
-  booked?: boolean;
-  /** Present on admin responses only. */
-  bookedCount?: number;
-}
-
-export interface PtSession {
-  id?: string;
-  memberId: string;
-  date: string;
-  time?: string;
-  trainerName?: string;
-  focus?: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
-}
-
 export interface RenewalRequest {
   id?: string;
   memberId: string;
@@ -268,12 +229,9 @@ export interface MemberOverview {
   status: MembershipStatus;
   daysLeft: number | null;
   trainer: Trainer | null;
-  attendance: AttendanceSummary;
   lastPayment: Payment | null;
   totalPaid: number;
   latestMeasurement: Measurement | null;
   weightChange: number | null;
-  upcomingPtCount: number;
-  nextPtSession: PtSession | null;
   workoutsLogged: number;
 }

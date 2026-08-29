@@ -6,9 +6,9 @@
  * member logging in never disturbs an admin session and vice versa.
  */
 import {
-  Member, MemberOverview, AttendanceRow, AttendanceSummary, Payment,
+  Member, MemberOverview, Payment,
   WorkoutPlan, WorkoutLog, DietPlan, Measurement, ProgressPhoto,
-  GymClass, PtSession, RenewalRequest,
+  RenewalRequest,
 } from './types';
 
 const TOKEN_KEY = 'member_token';
@@ -107,9 +107,6 @@ export async function changePassword(currentPassword: string, newPassword: strin
 // ------------------------- Member data -------------------------
 export const fetchOverview = () => request<MemberOverview>('/api/member/overview');
 
-export const fetchAttendance = () =>
-  request<{ rows: AttendanceRow[]; summary: AttendanceSummary }>('/api/member/attendance');
-
 export const fetchPayments = () => request<Payment[]>('/api/member/payments');
 
 export const fetchWorkoutPlan = () =>
@@ -144,12 +141,6 @@ export async function uploadMemberImage(file: File): Promise<{ file: string; url
   form.append('file', file);
   return request<{ file: string; url: string }>('/api/member/upload', { method: 'POST', body: form });
 }
-
-export const fetchSchedule = () =>
-  request<{ classes: GymClass[]; ptSessions: PtSession[] }>('/api/member/schedule');
-
-export const toggleClassBooking = (classId: string) =>
-  request<{ booked: boolean }>(`/api/member/classes/${classId}/book`, { method: 'POST' });
 
 export const requestRenewal = (planName: string, note: string) =>
   request<RenewalRequest>('/api/member/renewal-request', { method: 'POST', body: json({ planName, note }) });

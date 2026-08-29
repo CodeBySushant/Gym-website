@@ -1,8 +1,7 @@
 /**
  * Fetch helper for admin-only endpoints that live outside the
- * Firebase-shaped shim in api.ts — members, renewal requests, classes and PT
- * sessions. It reuses the same admin token api.ts stores at login, so there is
- * one session, not two.
+ * Firebase-shaped shim in api.ts — members and renewal requests. It reuses the
+ * same admin token api.ts stores at login, so there is one session, not two.
  */
 const TOKEN_KEY = 'admin_token';
 

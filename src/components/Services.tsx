@@ -46,13 +46,13 @@ export default function Services({ services, settings }: ServicesProps) {
           </p>
         )}
         
-        <div className="flex justify-center gap-4 mb-12">
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mb-8 md:mb-12">
           {['Equipment', 'Facilities', 'Services'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
               className={cn(
-                'px-6 py-2 rounded-full text-sm font-black uppercase tracking-widest transition-all duration-300 border-2',
+                'px-4 sm:px-6 py-2 rounded-full text-xs sm:text-sm font-black uppercase tracking-widest transition-all duration-300 border-2',
                 activeTab === tab 
                   ? 'bg-[#FF003C] border-[#FF003C] text-white' 
                   : 'border-white/10 text-white/40 hover:border-white/20'

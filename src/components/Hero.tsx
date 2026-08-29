@@ -41,7 +41,7 @@ export default function Hero({ settings }: HeroProps) {
   return (
     <section
       id="home"
-      className="relative min-h-[100svh] md:h-screen md:min-h-[720px] flex items-center overflow-hidden"
+      className="relative min-h-[100svh] md:h-screen md:min-h-[720px] flex items-end md:items-center overflow-hidden"
     >
       {/*
         LAYER 0 — background.
@@ -81,7 +81,7 @@ export default function Hero({ settings }: HeroProps) {
         {/* Readability scrims.
             Mobile: vertical fade, since copy sits over the subject.
             Desktop: left-to-right fade, keeping the athlete clear on the right. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-black/95 md:bg-gradient-to-r md:from-black md:via-black/60 md:to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/20 to-black md:bg-gradient-to-r md:from-black md:via-black/60 md:to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
         {/* Faint brand wash so the photo reads as part of the site. */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,0,60,0.16),transparent_55%)]" />
@@ -102,9 +102,9 @@ export default function Hero({ settings }: HeroProps) {
       </div>
 
       {/* LAYER 2 — content. Left-pinned on desktop so it never hits the athlete. */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 pt-24 pb-16 md:py-0">
-        <div className="max-w-2xl text-center md:text-left">
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-5 gap-y-2 mb-4 md:mb-6">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 pt-28 pb-28 md:py-0">
+        <div className="max-w-2xl text-left">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 md:mb-6">
             <span className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/50">
               <MapPin className="w-3.5 h-3.5 text-[#FF003C]" />
               {BRAND.city}
@@ -124,7 +124,7 @@ export default function Hero({ settings }: HeroProps) {
           </div>
 
           {isLoading ? (
-            <div className="flex flex-col items-center md:items-start gap-4 mb-8">
+            <div className="flex flex-col gap-4 mb-8">
               <Skeleton className="h-16 md:h-24 w-full max-w-xl" />
               <Skeleton className="h-16 md:h-24 w-4/5 max-w-md" />
             </div>
@@ -139,17 +139,17 @@ export default function Hero({ settings }: HeroProps) {
           )}
 
           {/* Accent rule, desktop only — anchors the left-aligned block. */}
-          <div className="hidden md:block w-20 h-1 bg-[#FF003C] mb-7" aria-hidden="true" />
+          <div className="w-16 md:w-20 h-1 bg-[#FF003C] mb-6 md:mb-7" aria-hidden="true" />
 
           {isLoading ? (
-            <Skeleton className="h-6 w-full max-w-md mb-10 mx-auto md:mx-0" />
+            <Skeleton className="h-6 w-full max-w-md mb-10" />
           ) : (
-            <p className="text-base sm:text-lg md:text-xl text-white/75 mb-7 md:mb-9 font-medium max-w-lg mx-auto md:mx-0 leading-relaxed text-pretty drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
+            <p className="text-base sm:text-lg md:text-xl text-white/75 mb-7 md:mb-8 md:mb-9 font-medium max-w-lg leading-relaxed text-pretty drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
               {subline}
             </p>
           )}
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center md:justify-start gap-3 sm:gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
             <a
               href="#trial"
               className="group bg-[#FF003C] text-white px-8 md:px-10 py-3.5 md:py-5 rounded-full text-base md:text-lg font-black uppercase tracking-widest hover:bg-white hover:text-[#FF003C] transition-all duration-300 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,0,60,0.4)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"

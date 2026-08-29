@@ -15,6 +15,7 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
+import sharp from 'sharp';
 import { createMemberRoutes } from './members.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -212,6 +213,53 @@ function makeUploader(destination) {
 const upload = makeUploader(uploadsDir);        // public marketing images
 const uploadPrivate = makeUploader(privateDir); // member progress photos
 
+/**
+ * Target frame per section, matching the aspect ratio each card actually
+ * renders at. Uploads are cropped to these, so a square photo, a landscape
+ * shot and a phone portrait all end up the same shape and rows stay even.
+ *
+ * `position: 'attention'` keeps the busiest region rather than the geometric
+ * centre — for a photo of a person that is almost always their face.
+ * `progress` deliberately has no height: body photos get resized and stripped
+ * but never cropped, since trimming someone's progress photo defeats its point.
+ */
+const IMAGE_PRESETS = {
+  trainer: { width: 900, height: 1200, position: 'attention' },  // 3:4
+  service: { width: 1200, height: 900, position: 'attention' },  // 4:3
+  gallery: { width: 1600, height: 900, position: 'attention' },  // 16:9
+  tip: { width: 1200, height: 750, position: 'attention' },      // 16:10
+  member: { width: 600, height: 600, position: 'attention' },    // 1:1
+  hero: { width: 1920, height: 1080, position: 'attention' },    // 16:9
+  progress: { width: 1400, height: null, position: 'centre' },   // resize only
+  default: { width: 1600, height: null, position: 'centre' },
+};
+
+/**
+ * Re-encodes an upload to WebP at its preset size, replacing the original.
+ * Three things follow beyond consistent framing: files shrink by roughly an
+ * order of magnitude, EXIF is dropped (phone photos carry GPS coordinates),
+ * and anything non-image that got past the MIME filter fails to decode here.
+ */
+async function normalizeImage(filePath, presetName) {
+  const preset = IMAGE_PRESETS[presetName] || IMAGE_PRESETS.default;
+  const output = filePath.replace(/\.[^.]+$/, '.webp');
+
+  await sharp(filePath)
+    .rotate() // honour EXIF orientation before stripping it
+    .resize({
+      width: preset.width,
+      height: preset.height || undefined,
+      fit: preset.height ? 'cover' : 'inside',
+      position: preset.position,
+      withoutEnlargement: !preset.height,
+    })
+    .webp({ quality: 82 })
+    .toFile(output);
+
+  if (output !== filePath) await fs.promises.unlink(filePath).catch(() => {});
+  return path.basename(output);
+}
+
 // ------------------------- Auth -------------------------
 function signToken() {
   return jwt.sign({ email: ADMIN_EMAIL, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
@@ -240,6 +288,7 @@ const { router: memberRouter, makeRateLimit } = createMemberRoutes({
   upload,
   uploadPrivate,
   privateDir,
+  normalizeImage,
   fail,
 });
 app.use('/api', memberRouter);
@@ -408,10 +457,17 @@ app.delete('/api/leads/:id', requireDb, requireAdmin, async (req, res) => {
 });
 
 app.post('/api/upload', requireAdmin, (req, res) => {
-  upload.single('file')(req, res, (err) => {
+  upload.single('file')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
-    res.json({ url: `/uploads/${req.file.filename}` });
+    try {
+      const filename = await normalizeImage(req.file.path, req.body?.preset);
+      res.json({ url: `/uploads/${filename}` });
+    } catch (e) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      console.error('[upload] Could not process image', e);
+      res.status(400).json({ error: 'That file could not be read as an image.' });
+    }
   });
 });
 

@@ -223,7 +223,7 @@ function makeRateLimit({ max, windowMs, message }) {
 }
 
 // ------------------------- Router -------------------------
-export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, sanitize, upload, uploadPrivate, privateDir, fail: _fail }) {
+export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, sanitize, upload, uploadPrivate, privateDir, normalizeImage, fail: _fail }) {
   const router = express.Router();
 
   // H-03. 30 days was a long life for a token sitting in localStorage with no
@@ -565,10 +565,19 @@ export function createMemberRoutes({ JWT_SECRET, requireDb, requireAdmin, saniti
    * the opaque filename to attach in the next call.
    */
   router.post('/member/upload', requireDb, requireMember, (req, res) => {
-    uploadPrivate.single('file')(req, res, (err) => {
+    uploadPrivate.single('file')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: 'No file provided' });
-      res.json({ file: req.file.filename, url: signedPhotoUrl(req.file.filename) });
+      try {
+        // Resized and stripped of EXIF, but never cropped — a progress photo
+        // trimmed to a fixed frame stops being comparable to the last one.
+        const filename = await normalizeImage(req.file.path, 'progress');
+        res.json({ file: filename, url: signedPhotoUrl(filename) });
+      } catch (e) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+        console.error('[upload] Could not process image', e);
+        res.status(400).json({ error: 'That file could not be read as an image.' });
+      }
     });
   });
 

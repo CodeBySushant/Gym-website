@@ -8,7 +8,7 @@
 #   - no CORS setup on the backend
 #   - the signed progress-photo links at /api/photo/... keep working
 #
-# REPLACE api.supermenfitness.com BELOW with your real backend hostname.
+# Backend: api.getcrista.com
 
 [build]
   command = "npm run build"
@@ -24,13 +24,13 @@
 # ---------------------------------------------------------------------------
 [[redirects]]
   from = "/api/*"
-  to = "https://api.supermenfitness.com/api/:splat"
+  to = "https://api.getcrista.com/api/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/uploads/*"
-  to = "https://api.supermenfitness.com/uploads/:splat"
+  to = "https://api.getcrista.com/uploads/:splat"
   status = 200
   force = true
 
